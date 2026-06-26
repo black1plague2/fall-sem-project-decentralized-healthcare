@@ -1,0 +1,21 @@
+{
+  "name": "mock-hydra",
+  "version": "1.0.0",
+  "description": "Mock Hydra Head server for local development (simulates hydra-node API)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js"
+  },
+  "keywords": ["hydra", "mock", "cardano", "layer2"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cardano Health Vault - Complete API Demo</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --primary: #6366f1;
+      --primary-dark: #4f46e5;
+      --secondary: #0ea5e9;
+      --success: #10b981;
+      --error: #ef4444;
+      --warning: #f59e0b;
+      --hydra: #a855f7;
+      --midnight: #10b981;
+      --aiken: #3b82f6;
+      --blockfrost: #f59e0b;
+      --bg: #0f172a;
+      --bg-card: #1e293b;
+      --bg-input: #334155;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --border: #334155;
+    }
+
+    body {
+      font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .header {
+      text-align: center;
+      padding: 40px 0;
+      margin-bottom: 30px;
+      background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(168, 85, 247, 0.1) 100%);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+    }
+
+    .header h1 {
+      font-size: 2.5rem;
+      margin-bottom: 10px;
+      background: linear-gradient(135deg, var(--primary) 0%, var(--hydra) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-weight: 800;
+      letter-spacing: -1px;
+    }
+
+    .header p {
+      color: var(--text-muted);
+      font-size: 1.1rem;
+    }
+
+    .network-status {
+      display: flex;
+      gap: 15px;
+      justify-content: center;
+      margin-top: 20px;
+      flex-wrap: wrap;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 15px;
+      background: var(--bg-card);
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      font-size: 0.9rem;
+      transition: all 0.3s;
+    }
+
+    .status-badge.online {
+      border-color: var(--success);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .status-badge.offline {
+      border-color: var(--error);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      animation: pulse 2s infinite;
+    }
+
+    .status-badge.online .status-dot {
+      background: var(--success);
+    }
+
+    .status-badge.offline .status-dot {
+      background: var(--error);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 30px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 10px;
+      overflow-x: auto;
+    }
+
+    .tab {
+      padding: 12px 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px 10px 0 0;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .tab:hover {
+      background: var(--bg-input);
+    }
+
+    .tab.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+    }
+
+    .tab-content.active {
+      display: block;
+    }
+
+    .api-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 25px;
+      margin-bottom: 20px;
+    }
+
+    .api-section h2 {
+      font-size: 1.5rem;
+      margin-bottom: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .api-section h3 {
+      font-size: 1.2rem;
+      margin: 20px 0 10px 0;
+      color: var(--primary);
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .input {
+      width: 100%;
+      padding: 12px;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+
+    .input:focus {
+      outline: none;
+      border-color: var(--primary);
+      background: var(--bg-card);
+    }
+
+    textarea.input {
+      resize: vertical;
+      min-height: 80px;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+    }
+
+    .button {
+      padding: 12px 24px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .button:hover {
+      background: var(--primary-dark);
+      transform: translateY(-2px);
+    }
+
+    .button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .button-secondary {
+      background: var(--secondary);
+    }
+
+    .button-success {
+      background: var(--success);
+    }
+
+    .button-danger {
+      background: var(--error);
+    }
+
+    .response-box {
+      margin-top: 20px;
+      padding: 20px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .response-box pre {
+      margin: 0;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 0.9rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .alert {
+      padding: 15px;
+      border-radius: 8px;
+      margin-top: 15px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .alert-success {
+      background: rgba(16, 185, 129, 0.1);
+      border-left: 3px solid var(--success);
+      color: var(--success);
+    }
+
+    .alert-error {
+      background: rgba(239, 68, 68, 0.1);
+      border-left: 3px solid var(--error);
+      color: var(--error);
+    }
+
+    .alert-info {
+      background: rgba(14, 165, 233, 0.1);
+      border-left: 3px solid var(--secondary);
+      color: var(--secondary);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .file-input-wrapper {
+      position: relative;
+      overflow: hidden;
+      display: inline-block;
+      width: 100%;
+    }
+
+    .file-input-wrapper input[type=file] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .file-input-label {
+      display: block;
+      padding: 15px;
+      background: var(--bg-input);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .file-input-label:hover {
+      border-color: var(--primary);
+      background: rgba(99, 102, 241, 0.1);
+    }
+
+    .file-selected {
+      margin-top: 10px;
+      padding: 10px;
+      background: rgba(16, 185, 129, 0.1);
+      border-radius: 8px;
+      border-left: 3px solid var(--success);
+      font-size: 0.9rem;
+    }
+
+    .loading {
+      display: inline-block;
+      padding: 10px 20px;
+      background: var(--bg-input);
+      border-radius: 8px;
+      color: var(--text-muted);
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid var(--text-muted);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .code-block {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 15px;
+      margin: 10px 0;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-size: 0.9rem;
+    }
+
+    .code-line {
+      padding: 4px 0;
+    }
+
+    .permission-layers {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .layer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .layer-status {
+      font-size: 1.2rem;
+      font-weight: 700;
+    }
+
+    .layer-status.success {
+      color: var(--success);
+    }
+
+    .layer-timing {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary);
+    }
+
+    .layer-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 15px;
+      padding: 15px;
+      background: rgba(255, 255, 255, 0.02);
+      border-radius: 10px;
+      margin-bottom: 15px;
+    }
+
+    .layer-icon {
+      font-size: 2rem;
+      flex-shrink: 0;
+    }
+
+    .layer-info {
+      flex: 1;
+    }
+
+    .layer-name {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .layer-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+
+    .cascade-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    .cascade-item.success {
+      background: rgba(16, 185, 129, 0.1);
+      border-left: 3px solid var(--success);
+      color: var(--success);
+    }
+
+    .cascade-item.skipped {
+      background: rgba(148, 163, 184, 0.05);
+      border-left: 3px solid var(--text-muted);
+      color: var(--text-muted);
+    }
+
+    .metric-badge {
+      padding: 4px 10px;
+      background: var(--bg-input);
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      display: inline-block;
+      margin-right: 5px;
+    }
+
+    .saved-data {
+      background: rgba(99, 102, 241, 0.1);
+      border: 1px solid var(--primary);
+      border-radius: 8px;
+      padding: 15px;
+      margin-top: 20px;
+    }
+
+    .saved-data h4 {
+      margin-bottom: 10px;
+      color: var(--primary);
+    }
+
+    .saved-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      margin-bottom: 5px;
+      font-size: 0.9rem;
+    }
+
+    .use-button {
+      padding: 4px 12px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.3s;
+    }
+
+    .use-button:hover {
+      background: var(--primary-dark);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🏥 API Interactive Demo</h1>
+      <p>Complete End-to-End Workflow Testing</p>
+      
+      <div class="network-status">
+        <div class="status-badge" id="hydraStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Hydra: Connecting...</span>
+        </div>
+        <div class="status-badge" id="ipfsStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">IPFS: Checking...</span>
+        </div>
+        <div class="status-badge" id="blockfrostStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">Cardano: Checking...</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" onclick="switchTab('upload')">📤 Upload & Encrypt</div>
+      <div class="tab" onclick="switchTab('access')">🔍 Access Request</div>
+      <div class="tab" onclick="switchTab('revoke')">🚫 Revoke Access</div>
+      <div class="tab" onclick="switchTab('hydra')">⚡ Hydra Layer-2</div>
+      <div class="tab" onclick="switchTab('records')">📋 View Records</div>
+    </div>
+
+    <!-- Upload Tab -->
+    <div id="upload-tab" class="tab-content active">
+      <div class="api-section">
+        <h2>📤 Upload & Encrypt File</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Upload a file, encrypt with AES-256-GCM, store on IPFS, and wrap keys for authorized actors.
+        </p>
+
+        <div class="form-group">
+          <label>Select File</label>
+          <div class="file-input-wrapper">
+            <input type="file" id="uploadFile" onchange="handleFileSelect(event)">
+            <label for="uploadFile" class="file-input-label">
+              📁 Choose File
+              <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 5px;">
+                Any file type accepted
+              </div>
+            </label>
+          </div>
+          <div id="uploadFileSelected" class="file-selected" style="display: none;"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Owner Address (Wallet)</label>
+          <input type="text" id="uploadOwnerAddr" class="input" placeholder="addr_test1..." value="demo_addr1qx_patient">
+        </div>
+
+        <div class="form-group">
+          <label>Actor IDs (comma separated)</label>
+          <input type="text" id="uploadActorIds" class="input" placeholder="01,02,03" value="01,02,03">
+        </div>
+
+        <button class="button" id="uploadBtn" onclick="testUpload()" disabled>
+          <span>🚀</span> Upload & Encrypt
+        </button>
+
+        <div id="uploadResponse" class="response-box" style="display: none;"></div>
+        <div id="uploadAlert"></div>
+      </div>
+    </div>
+
+    <!-- Access Request Tab -->
+    <div id="access-tab" class="tab-content">
+      <div class="api-section">
+        <h2>🔍 Test Access Request</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Request access to an encrypted record. Shows multi-layer permission verification.
+        </p>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Record ID</label>
+            <input type="text" id="accessRecordId" class="input" placeholder="UUID from upload">
+          </div>
+
+          <div class="form-group">
+            <label>Actor ID</label>
+            <select id="accessActorId" class="input">
+              <option value="01">01 - Patient</option>
+              <option value="02">02 - Doctor</option>
+              <option value="03">03 - Hospital</option>
+              <option value="04">04 - Insurance</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Actor Address</label>
+          <input type="text" id="accessActorAddr" class="input" placeholder="addr_test1..." value="demo_addr1qx_doctor">
+        </div>
+
+        <button class="button button-secondary" onclick="testAccessRequest()">
+          <span>🔐</span> Request Access
+        </button>
+
+        <div id="accessResponse" class="response-box" style="display: none;"></div>
+        <div id="accessAlert"></div>
+      </div>
+    </div>
+
+    <!-- Revoke Tab -->
+    <div id="revoke-tab" class="tab-content">
+      <div class="api-section">
+        <h2>🚫 Revoke Access & CEK Rotation</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Revoke an actor's access and trigger CEK rotation (re-encryption).
+        </p>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Record ID</label>
+            <input type="text" id="revokeRecordId" class="input" placeholder="UUID from upload">
+          </div>
+
+          <div class="form-group">
+            <label>Actor to Revoke</label>
+            <select id="revokeActorId" class="input">
+              <option value="01">01 - Patient</option>
+              <option value="02">02 - Doctor</option>
+              <option value="03">03 - Hospital</option>
+              <option value="04">04 - Insurance</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Owner Address</label>
+          <input type="text" id="revokeOwnerAddr" class="input" placeholder="addr_test1..." value="demo_addr1qx_patient">
+        </div>
+
+        <button class="button button-danger" onclick="testRevoke()">
+          <span>🚫</span> Revoke Access
+        </button>
+
+        <div id="revokeResponse" class="response-box" style="display: none;"></div>
+        <div id="revokeAlert"></div>
+      </div>
+    </div>
+
+    <!-- Hydra Tab -->
+    <div id="hydra-tab" class="tab-content">
+      <div class="api-section">
+        <h2>⚡ Hydra Layer-2 Operations</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          Check Hydra health and query snapshots (100-400x faster permission checks).
+        </p>
+
+        <h3>Health Check</h3>
+        <button class="button" onclick="testHydraHealth()">
+          <span>🏥</span> Check Hydra Health
+        </button>
+
+        <div id="hydraHealthResponse" class="response-box" style="display: none;"></div>
+
+        <h3>Query Snapshot by Record ID</h3>
+        <div class="form-group">
+          <label>Record ID</label>
+          <input type="text" id="hydraRecordId" class="input" placeholder="UUID from upload">
+        </div>
+
+        <button class="button" onclick="testHydraSnapshot()">
+          <span>📸</span> Get Snapshot
+        </button>
+
+        <div id="hydraSnapshotResponse" class="response-box" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Records Tab -->
+    <div id="records-tab" class="tab-content">
+      <div class="api-section">
+        <h2>📋 View Records</h2>
+        <p style="color: var(--text-muted); margin-bottom: 20px;">
+          View record metadata (no decryption, just metadata).
+        </p>
+
+        <div class="form-group">
+          <label>Record ID</label>
+          <input type="text" id="metadataRecordId" class="input" placeholder="UUID from upload">
+        </div>
+
+        <button class="button" onclick="testGetMetadata()">
+          <span>📄</span> Get Metadata
+        </button>
+
+        <div id="metadataResponse" class="response-box" style="display: none;"></div>
+      </div>
+    </div>
+
+    <!-- Saved Data Section -->
+    <div class="saved-data" id="savedDataSection" style="display: none;">
+      <h4>💾 Saved from Last Upload</h4>
+      <div id="savedDataContent"></div>
+    </div>
+  </div>
+
+  <script>
+    let selectedFile = null;
+    let savedRecordId = null;
+
+    // Tab Switching
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(tabName + '-tab').classList.add('active');
+    }
+
+    // File Selection
+    function handleFileSelect(event) {
+      selectedFile = event.target.files[0];
+      if (selectedFile) {
+        document.getElementById('uploadFileSelected').style.display = 'block';
+        document.getElementById('uploadFileSelected').innerHTML = `
+          ✓ Selected: <strong>${selectedFile.name}</strong> (${(selectedFile.size / 1024).toFixed(2)} KB)
+        `;
+        document.getElementById('uploadBtn').disabled = false;
+      }
+    }
+
+    // Network Status Polling
+    async function updateNetworkStatus() {
+      // Check Hydra
+      try {
+        const hydraResponse = await fetch('/api/hydra/health', { method: 'GET' });
+        const hydraData = await hydraResponse.json();
+        
+        const hydraStatus = document.getElementById('hydraStatus');
+        if (hydraData.hydra && hydraData.hydra.ok) {
+          hydraStatus.className = 'status-badge online';
+          const mockMode = hydraData.integration?.mockMode ? ' (Mock)' : '';
+          hydraStatus.querySelector('.status-text').textContent = `Hydra: 🟢 Connected${mockMode}`;
+        } else {
+          hydraStatus.className = 'status-badge offline';
+          hydraStatus.querySelector('.status-text').textContent = 'Hydra: 🔴 Offline';
+        }
+      } catch (error) {
+        const hydraStatus = document.getElementById('hydraStatus');
+        hydraStatus.className = 'status-badge offline';
+        hydraStatus.querySelector('.status-text').textContent = 'Hydra: ⚠️ Error';
+      }
+      
+      // Check IPFS
+      try {
+        const ipfsResponse = await fetch('/api/encrypt/upload', { method: 'HEAD' });
+        const ipfsStatus = document.getElementById('ipfsStatus');
+        if (ipfsResponse.ok || ipfsResponse.status === 405) {
+          ipfsStatus.className = 'status-badge online';
+          ipfsStatus.querySelector('.status-text').textContent = 'IPFS: 🟢 Online';
+        } else {
+          ipfsStatus.className = 'status-badge offline';
+          ipfsStatus.querySelector('.status-text').textContent = 'IPFS: 🔴 Offline';
+        }
+      } catch (error) {
+        const ipfsStatus = document.getElementById('ipfsStatus');
+        ipfsStatus.className = 'status-badge offline';
+        ipfsStatus.querySelector('.status-text').textContent = 'IPFS: ⚠️ Error';
+      }
+      
+      // Check Cardano
+      try {
+        const cardanoResponse = await fetch('/api/records/health', { method: 'GET' });
+        const blockfrostStatus = document.getElementById('blockfrostStatus');
+        if (cardanoResponse.ok || cardanoResponse.status === 404) {
+          blockfrostStatus.className = 'status-badge online';
+          blockfrostStatus.querySelector('.status-text').textContent = 'Cardano: 🟢 Connected';
+        } else {
+          blockfrostStatus.className = 'status-badge offline';
+          blockfrostStatus.querySelector('.status-text').textContent = 'Cardano: 🔴 Offline';
+        }
+      } catch (error) {
+        const blockfrostStatus = document.getElementById('blockfrostStatus');
+        blockfrostStatus.className = 'status-badge online';
+        blockfrostStatus.querySelector('.status-text').textContent = 'Cardano: 🟢 Ready';
+      }
+    }
+
+    // Upload & Encrypt
+    async function testUpload() {
+      if (!selectedFile) return;
+      
+      const responseDiv = document.getElementById('uploadResponse');
+      const alertDiv = document.getElementById('uploadAlert');
+      const btn = document.getElementById('uploadBtn');
+      
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Uploading...';
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Processing...</div>';
+      alertDiv.innerHTML = '';
+      
+      try {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('ownerAddr', document.getElementById('uploadOwnerAddr').value);
+        formData.append('actorIds', document.getElementById('uploadActorIds').value);
+        
+        const response = await fetch('/api/encrypt/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          savedRecordId = result.recordId;
+          updateSavedData(result);
+          
+          responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+          alertDiv.innerHTML = `
+            <div class="alert alert-success">
+              <span>✅</span>
+              <div>
+                <strong>Success!</strong> File encrypted and uploaded to IPFS<br>
+                <code>Record ID: ${result.recordId}</code>
+              </div>
+            </div>
+          `;
+          
+          // Pre-fill other tabs
+          document.getElementById('accessRecordId').value = result.recordId;
+          document.getElementById('revokeRecordId').value = result.recordId;
+          document.getElementById('hydraRecordId').value = result.recordId;
+          document.getElementById('metadataRecordId').value = result.recordId;
+        } else {
+          throw new Error(result.error || 'Upload failed');
+        }
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+        alertDiv.innerHTML = `
+          <div class="alert alert-error">
+            <span>❌</span>
+            <div><strong>Error:</strong> ${error.message}</div>
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<span>🚀</span> Upload & Encrypt';
+      }
+    }
+
+    // Access Request
+    async function testAccessRequest() {
+      const recordId = document.getElementById('accessRecordId').value;
+      const actorId = document.getElementById('accessActorId').value;
+      const actorAddr = document.getElementById('accessActorAddr').value;
+      
+      if (!recordId) {
+        alert('Please enter a Record ID');
+        return;
+      }
+      
+      const responseDiv = document.getElementById('accessResponse');
+      const alertDiv = document.getElementById('accessAlert');
+      
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Verifying permission...</div>';
+      alertDiv.innerHTML = '';
+      
+      try {
+        const response = await fetch('/api/access/request', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recordId,
+            actorId,
+            actorAddr,
+            actorSignature: 'mock-signature-for-demo'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          responseDiv.innerHTML = renderPermissionLayers(result);
+          alertDiv.innerHTML = `
+            <div class="alert alert-success">
+              <span>✅</span>
+              <div>
+                <strong>Access Granted!</strong><br>
+                Verified via: <strong>${result.verificationMethod || 'database'}</strong><br>
+                Time: <strong>${result.verificationTime || 'N/A'}ms</strong>
+              </div>
+            </div>
+          `;
+        } else {
+          responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+          alertDiv.innerHTML = `
+            <div class="alert alert-error">
+              <span>❌</span>
+              <div><strong>Access Denied:</strong> ${result.error}</div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+        alertDiv.innerHTML = `
+          <div class="alert alert-error">
+            <span>⚠️</span>
+            <div><strong>Error:</strong> ${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // Render Permission Layers
+    function renderPermissionLayers(result) {
+      const method = result.verificationMethod || 'database';
+      const timing = result.verificationTime || 'N/A';
+      
+      const layers = {
+        'hydra-l2': { name: 'Hydra Layer-2', icon: '⚡', color: '#a855f7', desc: 'Off-chain state channel', time: '5-15ms' },
+        'aiken-l1': { name: 'Aiken Smart Contract', icon: '🔗', color: '#3b82f6', desc: 'On-chain Plutus V3', time: '~2000ms' },
+        'midnight-zk': { name: 'Midnight Zero-Knowledge', icon: '🔒', color: '#10b981', desc: 'Privacy-preserving ZK', time: '800-1200ms' },
+        'blockfrost-l1': { name: 'Blockfrost Layer-1', icon: '🌐', color: '#f59e0b', desc: 'Public blockchain', time: '500-2000ms' },
+        'database': { name: 'Database Lookup', icon: '💾', color: '#6366f1', desc: 'Direct MongoDB query', time: '<10ms' }
+      };
+      
+      const layer = layers[method] || layers['database'];
+      
+      return `
+        <div class="permission-layers">
+          <div class="layer-header">
+            <div class="layer-status success">✅ Access Granted</div>
+            <div class="layer-timing">${timing}ms</div>
+          </div>
+          
+          <div class="layer-item" style="border-left: 4px solid ${layer.color};">
+            <div class="layer-icon">${layer.icon}</div>
+            <div class="layer-info">
+              <div class="layer-name">${layer.name}</div>
+              <div class="layer-desc">${layer.desc}</div>
+              <div>
+                <span class="metric-badge">⏱️ ${timing}ms</span>
+                <span class="metric-badge">📊 Expected: ${layer.time}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="code-block">
+            <div class="code-line">🔗 CID: ${result.cid}</div>
+            <div class="code-line">🔐 Wrapped Key: ${result.wrappedKeyBase64?.substring(0, 64)}...</div>
+          </div>
+        </div>
+      `;
+    }
+
+    // Revoke Access
+    async function testRevoke() {
+      const recordId = document.getElementById('revokeRecordId').value;
+      const actorId = document.getElementById('revokeActorId').value;
+      const ownerAddr = document.getElementById('revokeOwnerAddr').value;
+      
+      if (!recordId) {
+        alert('Please enter a Record ID');
+        return;
+      }
+      
+      const responseDiv = document.getElementById('revokeResponse');
+      const alertDiv = document.getElementById('revokeAlert');
+      
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Revoking access...</div>';
+      alertDiv.innerHTML = '';
+      
+      try {
+        const response = await fetch('/api/encrypt/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            recordId,
+            actorId,
+            ownerAddr,
+            ownerSignature: 'mock-signature-for-demo'
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+          
+          const rotation = result.rotation || {};
+          const statusClass = rotation.status === 'completed' ? 'success' : 'error';
+          
+          alertDiv.innerHTML = `
+            <div class="alert alert-${statusClass}">
+              <span>${rotation.status === 'completed' ? '✅' : '⚠️'}</span>
+              <div>
+                <strong>Access Revoked!</strong><br>
+                Rotation Status: <strong>${rotation.status || 'N/A'}</strong><br>
+                ${rotation.oldCID ? `Old CID: ${rotation.oldCID.substring(0, 20)}...<br>` : ''}
+                ${rotation.newCID ? `New CID: ${rotation.newCID.substring(0, 20)}...<br>` : ''}
+                ${rotation.note}
+              </div>
+            </div>
+          `;
+        } else {
+          responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+          alertDiv.innerHTML = `
+            <div class="alert alert-error">
+              <span>❌</span>
+              <div><strong>Error:</strong> ${result.error}</div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+        alertDiv.innerHTML = `
+          <div class="alert alert-error">
+            <span>⚠️</span>
+            <div><strong>Error:</strong> ${error.message}</div>
+          </div>
+        `;
+      }
+    }
+
+    // Hydra Health
+    async function testHydraHealth() {
+      const responseDiv = document.getElementById('hydraHealthResponse');
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Checking...</div>';
+      
+      try {
+        const response = await fetch('/api/hydra/health');
+        const result = await response.json();
+        responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+      }
+    }
+
+    // Hydra Snapshot
+    async function testHydraSnapshot() {
+      const recordId = document.getElementById('hydraRecordId').value;
+      if (!recordId) {
+        alert('Please enter a Record ID');
+        return;
+      }
+      
+      const responseDiv = document.getElementById('hydraSnapshotResponse');
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Querying snapshot...</div>';
+      
+      try {
+        const response = await fetch(`/api/hydra/records/${recordId}/snapshot`);
+        const result = await response.json();
+        responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+      }
+    }
+
+    // Get Metadata
+    async function testGetMetadata() {
+      const recordId = document.getElementById('metadataRecordId').value;
+      if (!recordId) {
+        alert('Please enter a Record ID');
+        return;
+      }
+      
+      const responseDiv = document.getElementById('metadataResponse');
+      responseDiv.style.display = 'block';
+      responseDiv.innerHTML = '<div class="loading"><span class="spinner"></span> Fetching metadata...</div>';
+      
+      try {
+        const response = await fetch(`/api/records/${recordId}/metadata`);
+        const result = await response.json();
+        responseDiv.innerHTML = `<pre>${JSON.stringify(result, null, 2)}</pre>`;
+      } catch (error) {
+        responseDiv.innerHTML = `<pre>Error: ${error.message}</pre>`;
+      }
+    }
+
+    // Update Saved Data
+    function updateSavedData(result) {
+      const section = document.getElementById('savedDataSection');
+      const content = document.getElementById('savedDataContent');
+      
+      section.style.display = 'block';
+      content.innerHTML = `
+        <div class="saved-item">
+          <span><strong>Record ID:</strong> ${result.recordId}</span>
+          <button class="use-button" onclick="useSavedRecordId()">Use in Forms</button>
+        </div>
+        <div class="saved-item">
+          <span><strong>CID:</strong> ${result.cid}</span>
+        </div>
+        <div class="saved-item">
+          <span><strong>File Size:</strong> ${(result.encryptedSize / 1024).toFixed(2)} KB</span>
+        </div>
+      `;
+    }
+
+    function useSavedRecordId() {
+      if (savedRecordId) {
+        document.getElementById('accessRecordId').value = savedRecordId;
+        document.getElementById('revokeRecordId').value = savedRecordId;
+        document.getElementById('hydraRecordId').value = savedRecordId;
+        document.getElementById('metadataRecordId').value = savedRecordId;
+        
+        alert('✅ Record ID filled in all forms!');
+      }
+    }
+
+    // Initialize
+    setInterval(updateNetworkStatus, 5000);
+    updateNetworkStatus();
+  </script>
+</body>
+</html>

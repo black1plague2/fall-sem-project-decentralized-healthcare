@@ -1,0 +1,14 @@
+name = "cardano-health-vault"
+version = "1.0.0"
+description = "Aiken smart contracts for privacy-preserving healthcare record permissions"
+repository = { user = "black1plague2", project = "cardano-health-vault" }
+license = "MIT"
+plutus = "v3"
+
+[[dependencies]]
+name = "aiken-lang/stdlib"
+version = "2.1.0"
+source = "github"
+
+[config]
+network = "preview"

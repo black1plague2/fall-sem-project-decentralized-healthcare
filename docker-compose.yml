@@ -1,0 +1,93 @@
+version: '3.8'
+
+services:
+  # Cardano Healthcare Vault API
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cardano-vault-app
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - DB_URI=mongodb://mongo:27017/cardano-vault
+      - REDIS_URL=redis://redis:6379
+      - CEK_TTL_SECONDS=300
+      - DISABLE_REDIS=false
+      - IPFS_PROVIDER=pinata
+      - PINATA_KEY=${PINATA_KEY}
+      - PINATA_SECRET=${PINATA_SECRET}
+      - MOCK_IPFS_UPLOAD=false
+      - BLOCKFROST_PROJECT_ID=${BLOCKFROST_PROJECT_ID}
+      - CARDANO_NETWORK=testnet
+      - SIGNATURE_SHARED_SECRET=${SIGNATURE_SHARED_SECRET:-demo-secret}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - cardano-vault-network
+    volumes:
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # MongoDB
+  mongo:
+    image: mongo:7.0-jammy
+    container_name: cardano-vault-mongo
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=cardano-vault
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - cardano-vault-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # Redis
+  redis:
+    image: redis:7.2-alpine
+    container_name: cardano-vault-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - cardano-vault-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+networks:
+  cardano-vault-network:
+    driver: bridge
+
+volumes:
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+  redis-data:
+    driver: local
