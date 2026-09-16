@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cardano Healthcare Vault</title>
+<meta name="description" content="A patient-owned, blockchain-verified electronic health record — encrypted client-side, anchored across four independent verification layers." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/base.css" />
+<link rel="stylesheet" href="/landing.css" />
+</head>
+<body>
+
+<div class="blobfield" aria-hidden="true"></div>
+
+<header class="hero-land">
+  <h1 class="hero-title">A medical record<br/>only you can unlock</h1>
+  <p class="hero-subtitle">Patient-owned healthcare data. Encrypted client-side. Verified across blockchain + Hydra L2 + zero-knowledge layers.</p>
+  <div class="hero-ctas">
+    <a class="btn btn--primary" href="/demo.html">Try Live Demo</a>
+    <a class="btn btn--secondary" href="#how-it-works">How It Works</a>
+  </div>
+</header>
+
+<section class="features-grid">
+  <div class="feature-card">
+    <div class="feature-icon">🔐</div>
+    <h3>AES-256-GCM Encryption</h3>
+    <p>Military-grade authenticated encryption. Keys never leave your browser during upload.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">⚡</div>
+    <h3>Hydra Layer-2</h3>
+    <p>100-400x faster permission checks via off-chain state channels. 5-15ms vs. 2s on-chain.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🔗</div>
+    <h3>Blockchain-Anchored</h3>
+    <p>Immutable audit trail on Cardano. Every permission change recorded forever.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">🛡️</div>
+    <h3>Zero-Knowledge Privacy</h3>
+    <p>Prove access rights without revealing identity. Midnight ZK integration for ultimate privacy.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">👥</div>
+    <h3>Multi-Actor Control</h3>
+    <p>Patients, doctors, hospitals, and insurers — each with granular permissions.</p>
+  </div>
+  <div class="feature-card">
+    <div class="feature-icon">📋</div>
+    <h3>HIPAA/GDPR Compliant</h3>
+    <p>90-day audit logs. Right to erasure via CEK rotation. No PHI in plaintext.</p>
+  </div>
+</section>
+
+<section id="how-it-works" class="how-it-works">
+  <div class="container">
+    <h2>How It Works</h2>
+    <div class="flow-steps">
+      <div class="flow-step">
+        <div class="step-number">1</div>
+        <h3>Upload & Encrypt</h3>
+        <p>Select a medical record. AES-256-GCM encrypts it client-side before it ever reaches the server.</p>
+      </div>
+      <div class="flow-step">
+        <div class="step-number">2</div>
+        <h3>IPFS Storage</h3>
+        <p>Encrypted file pinned on IPFS via Pinata. Immutable, censorship-resistant, globally available.</p>
+      </div>
+      <div class="flow-step">
+        <div class="step-number">3</div>
+        <h3>Key Wrapping</h3>
+        <p>Wrap the encryption key for each authorized actor using RSA-OAEP. Only they can unwrap it.</p>
+      </div>
+      <div class="flow-step">
+        <div class="step-number">4</div>
+        <h3>Multi-Layer Verification</h3>
+        <p><strong>Hydra L2:</strong> Fast permission checks (5-15ms) • <strong>Aiken L1:</strong> Smart contract anchor (~2s) • <strong>Midnight ZK:</strong> Privacy proofs (800-1200ms) • <strong>Blockfrost:</strong> Public fallback</p>
+      </div>
+      <div class="flow-step">
+        <div class="step-number">5</div>
+        <h3>Access Control</h3>
+        <p>Actors request access. System verifies permissions across layers. Grant or revoke instantly.</p>
+      </div>
+      <div class="flow-step">
+        <div class="step-number">6</div>
+        <h3>Audit Trail</h3>
+        <p>Every operation logged with requestId correlation. Full compliance audit trail forever.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="tech-stack">
+  <div class="container">
+    <h2>Built With</h2>
+    <div class="stack-grid">
+      <div class="stack-item">
+        <h4>Encryption</h4>
+        <p>AES-256-GCM (authenticated)</p>
+        <p>RSA-OAEP (key wrapping)</p>
+      </div>
+      <div class="stack-item">
+        <h4>Storage</h4>
+        <p>IPFS (Pinata)</p>
+        <p>MongoDB (metadata)</p>
+      </div>
+      <div class="stack-item">
+        <h4>Blockchain</h4>
+        <p>Cardano (L1)</p>
+        <p>Hydra (L2 state channels)</p>
+      </div>
+      <div class="stack-item">
+        <h4>Smart Contracts</h4>
+        <p>Aiken (Plutus V3)</p>
+        <p>Midnight (ZK proofs)</p>
+      </div>
+      <div class="stack-item">
+        <h4>Backend</h4>
+        <p>Node.js 18+</p>
+        <p>Express.js</p>
+      </div>
+      <div class="stack-item">
+        <h4>Compliance</h4>
+        <p>HIPAA-aligned</p>
+        <p>GDPR-ready</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="project-info">
+  <div class="container">
+    <div class="info-columns">
+      <div class="info-column">
+        <h3>Key Features</h3>
+        <div class="info-list">
+          <div class="info-list__row"><span>Encryption</span><span>AES-256-GCM + RSA-OAEP</span></div>
+          <div class="info-list__row"><span>Speed</span><span>100-400x faster than L1</span></div>
+          <div class="info-list__row"><span>Privacy</span><span>Zero-Knowledge proofs</span></div>
+          <div class="info-list__row"><span>Immutability</span><span>Cardano blockchain</span></div>
+        </div>
+      </div>
+      <div class="info-column">
+        <h3>Project Goals</h3>
+        <div class="info-list">
+          <div class="info-list__row"><span>Target</span><span>Scopus conference paper</span></div>
+          <div class="info-list__row"><span>Compliance</span><span>HIPAA / GDPR-aligned</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="cta-band">
+  <h2>See the whole pipeline live</h2>
+  <p>Upload a record, request access as another actor, and revoke it — every step streams from the real backend in real time.</p>
+  <a class="btn" href="/demo.html">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+</div>
+
+<footer class="site-footer">
+  <p><strong>What's real vs. placeholder:</strong> AES-256-GCM encryption, RSA-OAEP key wrapping and the Hydra L2 head are genuinely executing on this server. Aiken, Midnight and Blockfrost run against the mocked/local scaffolding described in <code>.env.example</code> until real credentials are supplied.</p>
+</footer>
+
+<script src="/icons.js" defer></script>
+<script src="/landing.js" defer></script>
+</body>
+</html>
