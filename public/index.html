@@ -3,155 +3,2444 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+
 <title>Cardano Healthcare Vault</title>
-<meta name="description" content="A patient-owned, blockchain-verified electronic health record — encrypted client-side, anchored across four independent verification layers." />
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/base.css" />
-<link rel="stylesheet" href="/landing.css" />
+
+<meta name="description"
+content="A patient-owned, blockchain-verified electronic health record." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+
+/* =========================================================
+   DESIGN SYSTEM
+========================================================= */
+
+:root {
+  --bg: #05070d;
+  --bg-2: #080c15;
+  --bg-3: #0d1220;
+
+  --surface: rgba(255,255,255,.045);
+  --surface-strong: rgba(255,255,255,.075);
+
+  --border: rgba(255,255,255,.09);
+  --border-hover: rgba(255,255,255,.18);
+
+  --text: #f5f7fb;
+  --text-soft: #aeb7c9;
+  --text-muted: #707b91;
+
+  --cyan: #58e6ff;
+  --cyan-2: #19bfe2;
+
+  --purple: #9b7cff;
+  --pink: #ff70c7;
+  --green: #61f3ad;
+  --yellow: #ffd66b;
+
+  --hydra: #48dfff;
+  --aiken: #a98aff;
+  --midnight: #ff70cf;
+  --blockfrost: #68f1b1;
+
+  --radius: 24px;
+  --radius-sm: 14px;
+
+  --shadow:
+    0 30px 100px rgba(0,0,0,.45);
+
+  --gradient:
+    linear-gradient(
+      135deg,
+      #58e6ff 0%,
+      #9b7cff 50%,
+      #ff70c7 100%
+    );
+}
+
+
+/* =========================================================
+   RESET
+========================================================= */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(
+      circle at 50% -10%,
+      rgba(88,230,255,.10),
+      transparent 35%
+    ),
+    radial-gradient(
+      circle at 90% 30%,
+      rgba(155,124,255,.08),
+      transparent 30%
+    ),
+    var(--bg);
+
+  color: var(--text);
+
+  font-family: "DM Sans", sans-serif;
+
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+code,
+.mono {
+  font-family: "IBM Plex Mono", monospace;
+}
+
+
+/* =========================================================
+   BACKGROUND
+========================================================= */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+
+  pointer-events: none;
+
+  background-image:
+    linear-gradient(
+      rgba(255,255,255,.018) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      90deg,
+      rgba(255,255,255,.018) 1px,
+      transparent 1px
+    );
+
+  background-size: 55px 55px;
+
+  mask-image:
+    linear-gradient(
+      to bottom,
+      black,
+      transparent 75%
+    );
+
+  z-index: -3;
+}
+
+body::after {
+  content: "";
+
+  position: fixed;
+
+  width: 600px;
+  height: 600px;
+
+  left: 50%;
+  top: -300px;
+
+  transform: translateX(-50%);
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(88,230,255,.11),
+      rgba(155,124,255,.05) 35%,
+      transparent 70%
+    );
+
+  filter: blur(20px);
+
+  pointer-events: none;
+
+  z-index: -2;
+}
+
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+.site-nav {
+
+  position: sticky;
+  top: 18px;
+
+  width: min(1180px, calc(100% - 36px));
+
+  margin: 18px auto 0;
+
+  padding: 12px 14px 12px 18px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  background:
+    rgba(8,12,21,.72);
+
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+
+  border: 1px solid rgba(255,255,255,.09);
+
+  border-radius: 18px;
+
+  box-shadow:
+    0 15px 50px rgba(0,0,0,.28);
+
+  z-index: 100;
+}
+
+.site-nav__brand {
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  font-family: "Space Grotesk", sans-serif;
+
+  font-weight: 600;
+  font-size: 15px;
+}
+
+.site-nav__links {
+
+  display: flex;
+  align-items: center;
+  gap: 27px;
+
+  font-size: 13px;
+
+  color: var(--text-soft);
+}
+
+.site-nav__links a:not(.btn) {
+  transition: .25s ease;
+}
+
+.site-nav__links a:not(.btn):hover {
+  color: white;
+}
+
+
+/* =========================================================
+   BUTTONS
+========================================================= */
+
+.btn {
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+
+  min-height: 44px;
+
+  padding: 0 18px;
+
+  border-radius: 12px;
+
+  border: 1px solid rgba(255,255,255,.12);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(88,230,255,.16),
+      rgba(155,124,255,.14)
+    );
+
+  color: white;
+
+  font-size: 13px;
+  font-weight: 600;
+
+  transition:
+    transform .25s ease,
+    border-color .25s ease,
+    box-shadow .25s ease,
+    background .25s ease;
+
+  box-shadow:
+    0 0 0 rgba(88,230,255,0);
+}
+
+.btn:hover {
+
+  transform: translateY(-2px);
+
+  border-color:
+    rgba(88,230,255,.45);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(88,230,255,.25),
+      rgba(155,124,255,.22)
+    );
+
+  box-shadow:
+    0 12px 35px rgba(88,230,255,.12);
+}
+
+.btn--ghost-outline {
+
+  background:
+    rgba(255,255,255,.025);
+
+  border-color:
+    rgba(255,255,255,.15);
+}
+
+.btn--ghost-outline:hover {
+  background: rgba(255,255,255,.07);
+}
+
+
+/* =========================================================
+   HERO
+========================================================= */
+
+.hero-land {
+
+  position: relative;
+
+  width: min(1180px, calc(100% - 36px));
+
+  min-height: 720px;
+
+  margin: 0 auto;
+
+  padding:
+    125px 0
+    100px;
+
+  overflow: hidden;
+}
+
+.hero-land::before {
+
+  content: "";
+
+  position: absolute;
+
+  width: 750px;
+  height: 750px;
+
+  right: -260px;
+  top: -180px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(88,230,255,.13),
+      rgba(155,124,255,.08) 30%,
+      transparent 70%
+    );
+
+  filter: blur(15px);
+
+  pointer-events: none;
+}
+
+.hero-land::after {
+
+  content: "";
+
+  position: absolute;
+
+  width: 500px;
+  height: 500px;
+
+  left: -350px;
+  bottom: -300px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(255,112,199,.10),
+      transparent 70%
+    );
+
+  pointer-events: none;
+}
+
+.eyebrow,
+.section-eyebrow {
+
+  display: inline-flex;
+
+  align-items: center;
+  gap: 9px;
+
+  color: var(--cyan);
+
+  font-family: "IBM Plex Mono", monospace;
+
+  font-size: 11px;
+
+  text-transform: uppercase;
+
+  letter-spacing: .14em;
+
+  margin-bottom: 20px;
+}
+
+.eyebrow::before,
+.section-eyebrow::before {
+
+  content: "";
+
+  width: 7px;
+  height: 7px;
+
+  border-radius: 50%;
+
+  background: currentColor;
+
+  box-shadow:
+    0 0 15px currentColor;
+}
+
+.hero-title {
+
+  position: relative;
+
+  max-width: 850px;
+
+  font-family: "Space Grotesk", sans-serif;
+
+  font-size:
+    clamp(52px, 7vw, 94px);
+
+  line-height: .96;
+
+  letter-spacing: -.055em;
+
+  font-weight: 600;
+
+  z-index: 2;
+}
+
+.hero-title em {
+
+  font-weight: 400;
+
+  background:
+    linear-gradient(
+      100deg,
+      var(--cyan),
+      var(--purple),
+      var(--pink)
+    );
+
+  -webkit-background-clip: text;
+  background-clip: text;
+
+  color: transparent;
+
+  text-shadow:
+    0 0 60px rgba(88,230,255,.12);
+}
+
+.hero-sub {
+
+  position: relative;
+
+  max-width: 680px;
+
+  margin-top: 30px;
+
+  color: var(--text-soft);
+
+  font-size: 16px;
+
+  line-height: 1.75;
+
+  z-index: 2;
+}
+
+.hero-cta {
+
+  display: flex;
+
+  gap: 12px;
+
+  margin-top: 35px;
+
+  position: relative;
+
+  z-index: 5;
+}
+
+
+/* =========================================================
+   HERO GRAPHIC
+========================================================= */
+
+.hero-graphic {
+
+  position: absolute;
+
+  right: 20px;
+  top: 155px;
+
+  width: 500px;
+  height: 420px;
+
+  z-index: 1;
+}
+
+.hero-graphic::before {
+
+  content: "";
+
+  position: absolute;
+
+  inset: 70px;
+
+  border-radius: 50%;
+
+  border:
+    1px solid rgba(88,230,255,.12);
+
+  box-shadow:
+    0 0 80px rgba(88,230,255,.08),
+    inset 0 0 80px rgba(155,124,255,.04);
+
+  animation:
+    rotateOrbit 20s linear infinite;
+}
+
+.hero-graphic::after {
+
+  content: "";
+
+  position: absolute;
+
+  inset: 105px;
+
+  border-radius: 50%;
+
+  border:
+    1px dashed rgba(255,255,255,.08);
+
+  animation:
+    rotateOrbitReverse 14s linear infinite;
+}
+
+@keyframes rotateOrbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes rotateOrbitReverse {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+.hero-graphic__line {
+
+  position: absolute;
+
+  inset: 0;
+
+  width: 100%;
+  height: 100%;
+
+  opacity: .8;
+}
+
+.hero-graphic__line path {
+
+  stroke:
+    rgba(255,255,255,.15);
+
+  animation:
+    dashMove 3s linear infinite;
+}
+
+@keyframes dashMove {
+
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+
+/* =========================================================
+   ICON BADGES
+========================================================= */
+
+.icon-badge {
+
+  width: 58px;
+  height: 58px;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 18px;
+
+  border: 1px solid rgba(255,255,255,.1);
+
+  background:
+    rgba(255,255,255,.045);
+
+  backdrop-filter: blur(15px);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.08),
+    0 15px 40px rgba(0,0,0,.25);
+}
+
+.icon-badge--outline {
+  border-color:
+    rgba(88,230,255,.35);
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(88,230,255,.18),
+      rgba(155,124,255,.08)
+    );
+
+  box-shadow:
+    0 0 60px rgba(88,230,255,.18),
+    inset 0 0 30px rgba(88,230,255,.08);
+}
+
+.icon-badge--sm {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+}
+
+.icon-badge--md {
+  width: 52px;
+  height: 52px;
+}
+
+
+/* =========================================================
+   SATELLITE NODES
+========================================================= */
+
+.hero-graphic__sat {
+
+  position: absolute;
+
+  z-index: 5;
+
+  animation:
+    floatNode 4s ease-in-out infinite;
+}
+
+.hero-graphic__sat--1 {
+  left: 65px;
+  top: 35px;
+
+  color: var(--hydra);
+
+  border-color:
+    rgba(72,223,255,.35);
+
+  box-shadow:
+    0 0 35px rgba(72,223,255,.14);
+}
+
+.hero-graphic__sat--2 {
+  left: 55px;
+  bottom: 45px;
+
+  color: var(--aiken);
+
+  animation-delay: -1s;
+}
+
+.hero-graphic__sat--3 {
+  right: 50px;
+  top: 25px;
+
+  color: var(--midnight);
+
+  animation-delay: -2s;
+}
+
+.hero-graphic__sat--4 {
+  right: 35px;
+  bottom: 35px;
+
+  color: var(--blockfrost);
+
+  animation-delay: -3s;
+}
+
+@keyframes floatNode {
+
+  0%,100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.hero-graphic__center {
+
+  position: absolute;
+
+  left: 50%;
+  top: 50%;
+
+  transform: translate(-50%, -50%);
+
+  width: 110px;
+  height: 110px;
+
+  border-radius: 35px;
+
+  z-index: 6;
+
+  animation:
+    centerPulse 3s ease-in-out infinite;
+}
+
+@keyframes centerPulse {
+
+  0%,100% {
+    box-shadow:
+      0 0 45px rgba(88,230,255,.14);
+  }
+
+  50% {
+    box-shadow:
+      0 0 80px rgba(88,230,255,.28),
+      0 0 120px rgba(155,124,255,.10);
+  }
+}
+
+
+/* =========================================================
+   STATUS
+========================================================= */
+
+.status-row {
+
+  position: absolute;
+
+  left: 0;
+  bottom: 25px;
+
+  display: flex;
+  gap: 10px;
+
+  z-index: 10;
+}
+
+.status-pill {
+
+  padding: 8px 13px;
+
+  border-radius: 999px;
+
+  font-family: "IBM Plex Mono", monospace;
+
+  font-size: 10px;
+
+  background:
+    rgba(97,243,173,.07);
+
+  color:
+    var(--green);
+
+  border:
+    1px solid rgba(97,243,173,.16);
+
+  box-shadow:
+    0 0 25px rgba(97,243,173,.05);
+}
+
+
+/* =========================================================
+   SECTIONS
+========================================================= */
+
+.section {
+
+  width: min(1180px, calc(100% - 36px));
+
+  margin: 0 auto;
+
+  padding:
+    120px 0;
+}
+
+.section-head {
+
+  max-width: 760px;
+
+  margin-bottom: 55px;
+}
+
+.section-title {
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size:
+    clamp(38px, 5vw, 64px);
+
+  line-height: 1;
+
+  letter-spacing: -.045em;
+
+  font-weight: 600;
+}
+
+.section-sub {
+
+  margin-top: 20px;
+
+  color: var(--text-soft);
+
+  line-height: 1.7;
+
+  font-size: 15px;
+}
+
+
+/* =========================================================
+   HOW IT WORKS
+========================================================= */
+
+.how-list {
+
+  position: relative;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(2, 1fr);
+
+  gap: 1px;
+
+  background:
+    rgba(255,255,255,.08);
+
+  border:
+    1px solid rgba(255,255,255,.08);
+
+  border-radius: 24px;
+
+  overflow: hidden;
+}
+
+.how-item {
+
+  position: relative;
+
+  min-height: 220px;
+
+  padding: 32px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.055),
+      rgba(255,255,255,.018)
+    );
+
+  transition:
+    background .3s ease,
+    transform .3s ease;
+}
+
+.how-item:hover {
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(88,230,255,.09),
+      rgba(155,124,255,.05)
+    );
+
+  z-index: 2;
+}
+
+.how-item__index {
+
+  display: block;
+
+  margin-bottom: 50px;
+
+  font-family:
+    "IBM Plex Mono",
+    monospace;
+
+  color:
+    var(--cyan);
+
+  font-size: 12px;
+}
+
+.how-item__title {
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size: 21px;
+
+  font-weight: 600;
+
+  margin-bottom: 12px;
+}
+
+.how-item__desc {
+
+  max-width: 470px;
+
+  color: var(--text-muted);
+
+  line-height: 1.7;
+
+  font-size: 13px;
+}
+
+
+/* =========================================================
+   ARCHITECTURE CARDS
+========================================================= */
+
+.layers-grid {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 15px;
+}
+
+.layer-card {
+
+  position: relative;
+
+  min-height: 330px;
+
+  padding: 27px;
+
+  border-radius: 22px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255,255,255,.065),
+      rgba(255,255,255,.018)
+    );
+
+  border:
+    1px solid rgba(255,255,255,.08);
+
+  overflow: hidden;
+
+  transition:
+    transform .3s ease,
+    border-color .3s ease,
+    box-shadow .3s ease;
+}
+
+.layer-card::before {
+
+  content: "";
+
+  position: absolute;
+
+  width: 180px;
+  height: 180px;
+
+  top: -80px;
+  right: -80px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      currentColor,
+      transparent 70%
+    );
+
+  opacity: .07;
+}
+
+.layer-card:hover {
+
+  transform:
+    translateY(-7px);
+
+  border-color:
+    rgba(255,255,255,.18);
+
+  box-shadow:
+    0 25px 70px rgba(0,0,0,.28);
+}
+
+.layer-card:nth-child(1) {
+  color: var(--hydra);
+}
+
+.layer-card:nth-child(2) {
+  color: var(--aiken);
+}
+
+.layer-card:nth-child(3) {
+  color: var(--midnight);
+}
+
+.layer-card:nth-child(4) {
+  color: var(--blockfrost);
+}
+
+.layer-card__title {
+
+  margin-top: 24px;
+
+  color: white;
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size: 20px;
+
+  font-weight: 600;
+}
+
+.layer-card__desc {
+
+  margin-top: 14px;
+
+  color: var(--text-muted);
+
+  font-size: 13px;
+
+  line-height: 1.7;
+}
+
+.layer-card__meta {
+
+  position: absolute;
+
+  bottom: 25px;
+  left: 27px;
+  right: 27px;
+
+  display: flex;
+
+  justify-content: space-between;
+
+  padding-top: 18px;
+
+  border-top:
+    1px solid rgba(255,255,255,.07);
+
+  color: var(--text-muted);
+
+  font-family:
+    "IBM Plex Mono",
+    monospace;
+
+  font-size: 10px;
+}
+
+.layer-card__meta span:last-child {
+
+  color: currentColor;
+
+  text-transform: uppercase;
+}
+
+
+/* =========================================================
+   ROLES
+========================================================= */
+
+.roles-grid {
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, 1fr);
+
+  gap: 15px;
+}
+
+.role-card {
+
+  position: relative;
+
+  padding: 30px;
+
+  min-height: 285px;
+
+  border-radius: 22px;
+
+  background:
+    rgba(255,255,255,.035);
+
+  border:
+    1px solid rgba(255,255,255,.075);
+
+  overflow: hidden;
+
+  transition:
+    transform .3s ease,
+    background .3s ease;
+}
+
+.role-card::after {
+
+  content: "";
+
+  position: absolute;
+
+  width: 140px;
+  height: 140px;
+
+  right: -70px;
+  bottom: -70px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(88,230,255,.12),
+      transparent 70%
+    );
+}
+
+.role-card:hover {
+
+  transform:
+    translateY(-6px);
+
+  background:
+    rgba(255,255,255,.055);
+}
+
+.role-card__glyph {
+
+  width: 54px;
+  height: 54px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 16px;
+
+  border:
+    1px solid rgba(255,255,255,.1);
+
+  background:
+    rgba(255,255,255,.05);
+
+  margin-bottom: 45px;
+}
+
+.role-card__name {
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size: 21px;
+
+  font-weight: 600;
+}
+
+.role-card__role {
+
+  display: inline-block;
+
+  margin-top: 8px;
+
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  background:
+    rgba(88,230,255,.08);
+
+  border:
+    1px solid rgba(88,230,255,.14);
+
+  color:
+    var(--cyan);
+
+  font-family:
+    "IBM Plex Mono",
+    monospace;
+
+  font-size: 9px;
+
+  text-transform: uppercase;
+}
+
+.role-card__desc {
+
+  margin-top: 15px;
+
+  color: var(--text-muted);
+
+  font-size: 12px;
+
+  line-height: 1.65;
+}
+
+
+/* =========================================================
+   PROJECT / SCOPE
+========================================================= */
+
+#project {
+
+  padding-top: 50px;
+}
+
+.info-card {
+
+  display: grid;
+
+  grid-template-columns:
+    1fr 1fr;
+
+  min-height: 300px;
+
+  border:
+    1px solid rgba(255,255,255,.08);
+
+  border-radius: 25px;
+
+  overflow: hidden;
+
+  background:
+    linear-gradient(
+      120deg,
+      rgba(88,230,255,.055),
+      rgba(155,124,255,.035)
+    );
+}
+
+.info-block-title {
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size: 19px;
+
+  margin-bottom: 20px;
+}
+
+.info-card > div:last-child {
+
+  padding: 40px;
+
+}
+
+.info-list {
+
+  border-top:
+    1px solid rgba(255,255,255,.08);
+}
+
+.info-list__row {
+
+  display: flex;
+
+  justify-content: space-between;
+
+  gap: 30px;
+
+  padding: 17px 0;
+
+  border-bottom:
+    1px solid rgba(255,255,255,.06);
+
+  font-size: 12px;
+
+  color: var(--text-muted);
+}
+
+.info-list__row span:last-child {
+
+  color: var(--text-soft);
+
+  font-family:
+    "IBM Plex Mono",
+    monospace;
+
+  text-align: right;
+}
+
+
+/* =========================================================
+   CTA
+========================================================= */
+
+.cta-band {
+
+  position: relative;
+
+  width: min(1180px, calc(100% - 36px));
+
+  margin:
+    80px auto;
+
+  padding:
+    80px 60px;
+
+  text-align: center;
+
+  border-radius: 30px;
+
+  overflow: hidden;
+
+  border:
+    1px solid rgba(88,230,255,.15);
+
+  background:
+
+    radial-gradient(
+      circle at 50% 100%,
+      rgba(88,230,255,.13),
+      transparent 55%
+    ),
+
+    linear-gradient(
+      135deg,
+      rgba(88,230,255,.055),
+      rgba(155,124,255,.065),
+      rgba(255,112,199,.035)
+    );
+
+  box-shadow:
+    0 30px 100px rgba(0,0,0,.3);
+}
+
+.cta-band::before {
+
+  content: "";
+
+  position: absolute;
+
+  width: 300px;
+  height: 300px;
+
+  top: -180px;
+  left: 50%;
+
+  transform: translateX(-50%);
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(88,230,255,.15),
+      transparent 70%
+    );
+
+  filter: blur(10px);
+}
+
+.cta-band h2 {
+
+  position: relative;
+
+  font-family:
+    "Space Grotesk",
+    sans-serif;
+
+  font-size:
+    clamp(34px, 5vw, 58px);
+
+  letter-spacing:
+    -.045em;
+}
+
+.cta-band p {
+
+  position: relative;
+
+  max-width: 600px;
+
+  margin:
+    18px auto 28px;
+
+  color: var(--text-muted);
+
+  line-height: 1.7;
+
+  font-size: 14px;
+}
+
+.cta-band .btn {
+
+  position: relative;
+}
+
+
+/* =========================================================
+   FOOTER
+========================================================= */
+
+.site-footer {
+
+  width: min(1180px, calc(100% - 36px));
+
+  margin:
+    0 auto;
+
+  padding:
+    30px 0 50px;
+
+  border-top:
+    1px solid rgba(255,255,255,.07);
+
+  color:
+    var(--text-muted);
+
+  font-size: 11px;
+
+  line-height: 1.7;
+}
+
+.site-footer strong {
+
+  color: var(--text-soft);
+}
+
+.site-footer code {
+
+  color: var(--cyan);
+
+  background:
+    rgba(88,230,255,.05);
+
+  padding: 3px 6px;
+
+  border-radius: 5px;
+}
+
+
+/* =========================================================
+   SCROLL REVEAL
+========================================================= */
+
+.section,
+.cta-band {
+
+  animation:
+    sectionReveal .8s ease both;
+}
+
+@keyframes sectionReveal {
+
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+
+/* =========================================================
+   CUSTOM SCROLLBAR
+========================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #05070d;
+}
+
+::-webkit-scrollbar-thumb {
+
+  background:
+    linear-gradient(
+      var(--cyan),
+      var(--purple)
+    );
+
+  border-radius: 99px;
+}
+
+
+/* =========================================================
+   SELECTION
+========================================================= */
+
+::selection {
+
+  background:
+    rgba(88,230,255,.25);
+
+  color: white;
+}
+
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 950px) {
+
+  .site-nav__links a:not(.btn) {
+    display: none;
+  }
+
+  .hero-land {
+
+    padding-top: 90px;
+
+    min-height: 850px;
+  }
+
+  .hero-graphic {
+
+    position: absolute;
+
+    width: 390px;
+    height: 330px;
+
+    right: 50%;
+
+    transform: translateX(50%);
+
+    top: 500px;
+
+    opacity: .75;
+  }
+
+  .hero-title {
+
+    font-size:
+      clamp(48px, 11vw, 75px);
+  }
+
+  .layers-grid,
+  .roles-grid {
+
+    grid-template-columns:
+      repeat(2, 1fr);
+  }
+}
+
+
+@media (max-width: 650px) {
+
+  .site-nav {
+
+    width: calc(100% - 22px);
+
+    top: 10px;
+
+    margin-top: 10px;
+  }
+
+  .site-nav__brand {
+
+    font-size: 13px;
+  }
+
+  .site-nav .btn {
+
+    min-height: 38px;
+
+    padding: 0 12px;
+
+    font-size: 11px;
+  }
+
+  .hero-land,
+  .section,
+  .cta-band,
+  .site-footer {
+
+    width:
+      calc(100% - 28px);
+  }
+
+  .hero-land {
+
+    padding-top: 85px;
+
+    min-height: 790px;
+  }
+
+  .hero-title {
+
+    font-size:
+      clamp(45px, 14vw, 65px);
+
+    line-height: .98;
+  }
+
+  .hero-sub {
+
+    font-size: 14px;
+
+    line-height: 1.7;
+  }
+
+  .hero-cta {
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    max-width: 300px;
+  }
+
+  .hero-graphic {
+
+    width: 330px;
+    height: 280px;
+
+    top: 515px;
+  }
+
+  .hero-graphic__sat {
+
+    transform: scale(.8);
+  }
+
+  .section {
+
+    padding: 80px 0;
+  }
+
+  .section-title {
+
+    font-size: 40px;
+  }
+
+  .how-list {
+
+    grid-template-columns: 1fr;
+  }
+
+  .how-item {
+
+    min-height: 190px;
+  }
+
+  .layers-grid,
+  .roles-grid {
+
+    grid-template-columns: 1fr;
+  }
+
+  .layer-card {
+
+    min-height: 270px;
+  }
+
+  .info-card {
+
+    grid-template-columns: 1fr;
+  }
+
+  .cta-band {
+
+    padding: 60px 25px;
+
+    margin:
+      40px auto;
+  }
+
+  .cta-band h2 {
+
+    font-size: 38px;
+  }
+
+  .status-row {
+
+    bottom: 5px;
+  }
+}
+
+</style>
 </head>
+
 <body>
 
-<div class="blobfield" aria-hidden="true"></div>
+<!-- =====================================================
+     NAVIGATION
+===================================================== -->
 
 <nav class="site-nav">
+
   <a class="site-nav__brand" href="/">
-    <span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span>
+
+    <span
+      class="icon-badge icon-badge--outline icon-badge--sm"
+      data-icon="shieldCheck">
+    </span>
+
     Cardano Healthcare Vault
+
   </a>
+
   <div class="site-nav__links">
-    <a href="#how-it-works">How it works</a>
-    <a href="#layers">Architecture</a>
-    <a href="#roles">Roles</a>
-    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+
+    <a href="#how-it-works">
+      How it works
+    </a>
+
+    <a href="#layers">
+      Architecture
+    </a>
+
+    <a href="#roles">
+      Roles
+    </a>
+
+    <a class="btn" href="/dashboard">
+      Launch Dashboard
+      <span
+        data-icon="chevronRight"
+        style="width:16px;height:16px;display:inline-flex">
+      </span>
+    </a>
+
   </div>
+
 </nav>
 
+
+<!-- =====================================================
+     HERO
+===================================================== -->
+
 <header class="hero-land">
-  <p class="eyebrow">Decentralized EHR on Cardano</p>
-  <h1 class="hero-title">A medical record<br/>only <em style="font-style:italic">you</em> unlock.</h1>
-  <p class="hero-sub">Files are encrypted on the server with AES-256-GCM and pinned to IPFS. The decryption key is never handed out on a database flag — every request is re-verified across four independent, increasingly-authoritative layers: Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1.</p>
+
+  <p class="eyebrow">
+    Decentralized EHR on Cardano
+  </p>
+
+  <h1 class="hero-title">
+
+    A medical record<br>
+
+    only
+    <em>you</em>
+    unlock.
+
+  </h1>
+
+  <p class="hero-sub">
+
+    Files are encrypted with AES-256-GCM and pinned to IPFS.
+    The decryption key is never handed out based on a database flag.
+    Every request is re-verified across four independent verification layers:
+    Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1.
+
+  </p>
+
   <div class="hero-cta">
-    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
-    <a class="btn btn--ghost-outline on-dark-bg" href="#how-it-works">See how it works</a>
+
+    <a class="btn" href="/dashboard">
+
+      Launch Dashboard
+
+      <span
+        data-icon="chevronRight"
+        style="width:16px;height:16px;display:inline-flex">
+      </span>
+
+    </a>
+
+    <a
+      class="btn btn--ghost-outline"
+      href="#how-it-works">
+
+      See how it works
+
+    </a>
+
   </div>
+
+
+  <!-- NETWORK VISUAL -->
 
   <div class="hero-graphic" aria-hidden="true">
-    <svg class="hero-graphic__line" viewBox="0 0 520 220" fill="none">
-      <path d="M100 30 L260 110" stroke="var(--on-dark-faint)" stroke-width="1.5" stroke-dasharray="4 5"/>
-      <path d="M100 180 L260 110" stroke="var(--on-dark-faint)" stroke-width="1.5" stroke-dasharray="4 5"/>
-      <path d="M430 20 L260 110" stroke="var(--on-dark-faint)" stroke-width="1.5" stroke-dasharray="4 5"/>
-      <path d="M440 190 L260 110" stroke="var(--on-dark-faint)" stroke-width="1.5" stroke-dasharray="4 5"/>
+
+    <svg
+      class="hero-graphic__line"
+      viewBox="0 0 520 420"
+      fill="none">
+
+      <path
+        d="M90 80 L260 210"
+        stroke-width="1.5"
+        stroke-dasharray="4 5"/>
+
+      <path
+        d="M90 340 L260 210"
+        stroke-width="1.5"
+        stroke-dasharray="4 5"/>
+
+      <path
+        d="M430 70 L260 210"
+        stroke-width="1.5"
+        stroke-dasharray="4 5"/>
+
+      <path
+        d="M440 345 L260 210"
+        stroke-width="1.5"
+        stroke-dasharray="4 5"/>
+
     </svg>
-    <span class="hero-graphic__sat hero-graphic__sat--1 icon-badge icon-badge--hydra" data-icon="zap"></span>
-    <span class="hero-graphic__sat hero-graphic__sat--2 icon-badge icon-badge--aiken" data-icon="fileLock2"></span>
-    <span class="hero-graphic__sat hero-graphic__sat--3 icon-badge icon-badge--midnight" data-icon="eyeOff"></span>
-    <span class="hero-graphic__sat hero-graphic__sat--4 icon-badge icon-badge--blockfrost" data-icon="link2"></span>
-    <span class="hero-graphic__center icon-badge icon-badge--outline" data-icon="shieldCheck"></span>
+
+
+    <span
+      class="hero-graphic__sat hero-graphic__sat--1 icon-badge"
+      data-icon="zap">
+    </span>
+
+    <span
+      class="hero-graphic__sat hero-graphic__sat--2 icon-badge"
+      data-icon="fileLock2">
+    </span>
+
+    <span
+      class="hero-graphic__sat hero-graphic__sat--3 icon-badge"
+      data-icon="eyeOff">
+    </span>
+
+    <span
+      class="hero-graphic__sat hero-graphic__sat--4 icon-badge"
+      data-icon="link2">
+    </span>
+
+    <span
+      class="hero-graphic__center icon-badge icon-badge--outline"
+      data-icon="shieldCheck">
+    </span>
+
   </div>
+
 
   <div class="status-row" id="statusRow">
-    <span class="status-pill status-pill--loading">checking live systems&hellip;</span>
+
+    <span class="status-pill">
+      ● systems online
+    </span>
+
   </div>
+
 </header>
 
+
+<!-- =====================================================
+     HOW IT WORKS
+===================================================== -->
+
 <section class="section" id="how-it-works">
+
   <div class="section-head">
-    <p class="section-eyebrow">How it works</p>
-    <h2 class="section-title">Six real steps, not a demo timer</h2>
-    <p class="section-sub">Everything below actually happens on the server when you use the dashboard — each step is streamed live so you can watch it, not just take it on faith.</p>
+
+    <p class="section-eyebrow">
+      How it works
+    </p>
+
+    <h2 class="section-title">
+      Six real steps.
+    </h2>
+
+    <p class="section-sub">
+
+      Not a demo timer. These are the actual operations
+      performed by the healthcare vault architecture.
+
+    </p>
+
   </div>
+
+
   <div class="how-list">
-    <div class="how-item"><span class="how-item__index">01</span><div><div class="how-item__title">Encrypt client-side</div><div class="how-item__desc">A fresh 256-bit key (CEK) is generated per file and used for AES-256-GCM authenticated encryption — tamper-evident, not just confidential.</div></div></div>
-    <div class="how-item"><span class="how-item__index">02</span><div><div class="how-item__title">Pin to IPFS</div><div class="how-item__desc">The encrypted package (never the plaintext) is content-addressed and pinned to IPFS. The CID is hashed and anchored, not the file itself.</div></div></div>
-    <div class="how-item"><span class="how-item__index">03</span><div><div class="how-item__title">Wrap the key per actor</div><div class="how-item__desc">The CEK is individually wrapped with RSA-OAEP for each authorized actor — Doctor, Hospital, Insurance — so no two actors share a copy of the same key material.</div></div></div>
-    <div class="how-item"><span class="how-item__index">04</span><div><div class="how-item__title">Anchor &amp; share on Hydra L2</div><div class="how-item__desc">The permission record is anchored and proposed to a Hydra Layer-2 head for near-instant (5&ndash;15ms target) off-chain permission checks.</div></div></div>
-    <div class="how-item"><span class="how-item__index">05</span><div><div class="how-item__title">Verify on request</div><div class="how-item__desc">When an actor asks for access, the server checks Hydra L2 first, then falls back through Aiken L1 &rarr; Midnight ZK &rarr; Blockfrost L1 &mdash; cheapest and fastest layer first, most authoritative last.</div></div></div>
-    <div class="how-item"><span class="how-item__index">06</span><div><div class="how-item__title">Revoke rotates the key</div><div class="how-item__desc">Revoking an actor doesn't just delete a row: the file is re-encrypted under a brand-new CEK and re-wrapped for everyone remaining, so the old key is permanently useless.</div></div></div>
+
+    <div class="how-item">
+
+      <span class="how-item__index">01 / ENCRYPT</span>
+
+      <div class="how-item__title">
+        Encrypt client-side
+      </div>
+
+      <div class="how-item__desc">
+
+        A fresh 256-bit key is generated per file and used
+        for AES-256-GCM authenticated encryption.
+
+      </div>
+
+    </div>
+
+
+    <div class="how-item">
+
+      <span class="how-item__index">02 / IPFS</span>
+
+      <div class="how-item__title">
+        Pin to IPFS
+      </div>
+
+      <div class="how-item__desc">
+
+        The encrypted package is content-addressed and
+        pinned to IPFS. Plaintext never reaches the storage layer.
+
+      </div>
+
+    </div>
+
+
+    <div class="how-item">
+
+      <span class="how-item__index">03 / KEY WRAP</span>
+
+      <div class="how-item__title">
+        Wrap the key per actor
+      </div>
+
+      <div class="how-item__desc">
+
+        RSA-OAEP wrapping creates an independently protected
+        copy of the file key for every authorized actor.
+
+      </div>
+
+    </div>
+
+
+    <div class="how-item">
+
+      <span class="how-item__index">04 / HYDRA</span>
+
+      <div class="how-item__title">
+        Anchor on Hydra L2
+      </div>
+
+      <div class="how-item__desc">
+
+        Permission state is proposed to the Hydra Layer-2
+        head for rapid off-chain permission checks.
+
+      </div>
+
+    </div>
+
+
+    <div class="how-item">
+
+      <span class="how-item__index">05 / VERIFY</span>
+
+      <div class="how-item__title">
+        Verify on request
+      </div>
+
+      <div class="how-item__desc">
+
+        Requests move through Hydra L2 → Aiken L1 →
+        Midnight ZK → Blockfrost L1.
+
+      </div>
+
+    </div>
+
+
+    <div class="how-item">
+
+      <span class="how-item__index">06 / REVOKE</span>
+
+      <div class="how-item__title">
+        Revoke rotates the key
+      </div>
+
+      <div class="how-item__desc">
+
+        Revocation triggers re-encryption under a new CEK,
+        invalidating the previously distributed key material.
+
+      </div>
+
+    </div>
+
   </div>
+
 </section>
+
+
+<!-- =====================================================
+     ARCHITECTURE
+===================================================== -->
 
 <section class="section" id="layers">
+
   <div class="section-head">
-    <p class="section-eyebrow">Architecture</p>
-    <h2 class="section-title">Four layers, increasing authority</h2>
-    <p class="section-sub">Badges show what's genuinely live on this server right now vs. running on mocked/local scaffolding — see <code>.env.example</code> to wire in real credentials.</p>
+
+    <p class="section-eyebrow">
+      Architecture
+    </p>
+
+    <h2 class="section-title">
+      Four layers.<br>
+      Increasing authority.
+    </h2>
+
+    <p class="section-sub">
+
+      The architecture combines rapid off-chain verification
+      with progressively authoritative blockchain and ZK layers.
+
+    </p>
+
   </div>
+
+
   <div class="layers-grid" id="layersGrid">
+
+
     <div class="layer-card">
-      <div class="icon-badge icon-badge--hydra icon-badge--md" data-icon="zap"></div>
-      <div class="layer-card__title">Hydra L2</div>
-      <div class="layer-card__desc">Off-chain state channel. Near-physical-limit latency for permission checks — 100&ndash;400&times; faster than a base-layer query.</div>
-      <div class="layer-card__meta"><span>5&ndash;15ms target</span><span class="mono" data-layer="hydra">&hellip;</span></div>
+
+      <div
+        class="icon-badge icon-badge--md"
+        data-icon="zap">
+      </div>
+
+      <div class="layer-card__title">
+        Hydra L2
+      </div>
+
+      <div class="layer-card__desc">
+
+        Off-chain state channel designed for
+        extremely low-latency permission checks.
+
+      </div>
+
+      <div class="layer-card__meta">
+
+        <span>5–15ms target</span>
+
+        <span
+          class="mono"
+          data-layer="hydra">
+          live
+        </span>
+
+      </div>
+
     </div>
+
+
     <div class="layer-card">
-      <div class="icon-badge icon-badge--aiken icon-badge--md" data-icon="fileLock2"></div>
-      <div class="layer-card__title">Aiken L1</div>
-      <div class="layer-card__desc">A Plutus V3 smart contract enforces that only the record owner can grant, revoke or update permissions — immutable audit trail.</div>
-      <div class="layer-card__meta"><span>~2s</span><span class="mono" data-layer="aiken">&hellip;</span></div>
+
+      <div
+        class="icon-badge icon-badge--md"
+        data-icon="fileLock2">
+      </div>
+
+      <div class="layer-card__title">
+        Aiken L1
+      </div>
+
+      <div class="layer-card__desc">
+
+        Plutus V3 smart-contract layer enforcing
+        owner-controlled permission operations.
+
+      </div>
+
+      <div class="layer-card__meta">
+
+        <span>~2s</span>
+
+        <span
+          class="mono"
+          data-layer="aiken">
+          L1
+        </span>
+
+      </div>
+
     </div>
+
+
     <div class="layer-card">
-      <div class="icon-badge icon-badge--midnight icon-badge--md" data-icon="eyeOff"></div>
-      <div class="layer-card__title">Midnight ZK</div>
-      <div class="layer-card__desc">Zero-knowledge proof of permission — an actor can prove access without revealing who else has it.</div>
-      <div class="layer-card__meta"><span>800&ndash;1200ms</span><span class="mono" data-layer="midnight">&hellip;</span></div>
+
+      <div
+        class="icon-badge icon-badge--md"
+        data-icon="eyeOff">
+      </div>
+
+      <div class="layer-card__title">
+        Midnight ZK
+      </div>
+
+      <div class="layer-card__desc">
+
+        Zero-knowledge verification allows permission
+        proofs without exposing unnecessary information.
+
+      </div>
+
+      <div class="layer-card__meta">
+
+        <span>800–1200ms</span>
+
+        <span
+          class="mono"
+          data-layer="midnight">
+          ZK
+        </span>
+
+      </div>
+
     </div>
+
+
     <div class="layer-card">
-      <div class="icon-badge icon-badge--blockfrost icon-badge--md" data-icon="link2"></div>
-      <div class="layer-card__title">Blockfrost L1</div>
-      <div class="layer-card__desc">Public on-chain fallback query against Cardano itself — the slowest, most authoritative source of truth.</div>
-      <div class="layer-card__meta"><span>500&ndash;2000ms</span><span class="mono" data-layer="blockfrost">&hellip;</span></div>
+
+      <div
+        class="icon-badge icon-badge--md"
+        data-icon="link2">
+      </div>
+
+      <div class="layer-card__title">
+        Blockfrost L1
+      </div>
+
+      <div class="layer-card__desc">
+
+        Public Cardano blockchain query acting as
+        the final authoritative fallback.
+
+      </div>
+
+      <div class="layer-card__meta">
+
+        <span>500–2000ms</span>
+
+        <span
+          class="mono"
+          data-layer="blockfrost">
+          L1
+        </span>
+
+      </div>
+
     </div>
+
   </div>
+
 </section>
+
+
+<!-- =====================================================
+     ROLES
+===================================================== -->
 
 <section class="section" id="roles">
+
   <div class="section-head">
-    <p class="section-eyebrow">Actors</p>
-    <h2 class="section-title">Built for four roles</h2>
-    <p class="section-sub">Every permission decision is owner-controlled: the Patient grants and revokes, everyone else requests.</p>
+
+    <p class="section-eyebrow">
+      Actors
+    </p>
+
+    <h2 class="section-title">
+      Four roles.<br>
+      One owner.
+    </h2>
+
+    <p class="section-sub">
+
+      Permission decisions remain controlled by the patient.
+      Every other actor operates through explicit authorization.
+
+    </p>
+
   </div>
+
+
   <div class="roles-grid">
-    <div class="role-card"><div class="role-card__glyph icon-badge--patient" data-icon="user"></div><div class="role-card__name">Patient</div><div class="role-card__role">Owner</div><div class="role-card__desc">Uploads records, grants access, and is the only actor who can revoke it.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--doctor" data-icon="stethoscope"></div><div class="role-card__name">Doctor</div><div class="role-card__role">Requester</div><div class="role-card__desc">Requests access to treat a patient; access is scoped to records they've been granted.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--hospital" data-icon="building2"></div><div class="role-card__name">Hospital</div><div class="role-card__role">Requester</div><div class="role-card__desc">Institutional access for admissions, records handling and coordination of care.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--insurance" data-icon="umbrella"></div><div class="role-card__name">Insurance</div><div class="role-card__role">Requester</div><div class="role-card__desc">Verifies claims against records it has explicitly been granted access to — nothing more.</div></div>
+
+
+    <div class="role-card">
+
+      <div
+        class="role-card__glyph"
+        data-icon="user">
+      </div>
+
+      <div class="role-card__name">
+        Patient
+      </div>
+
+      <div class="role-card__role">
+        Owner
+      </div>
+
+      <div class="role-card__desc">
+
+        Uploads records, grants access and
+        controls revocation.
+
+      </div>
+
+    </div>
+
+
+    <div class="role-card">
+
+      <div
+        class="role-card__glyph"
+        data-icon="stethoscope">
+      </div>
+
+      <div class="role-card__name">
+        Doctor
+      </div>
+
+      <div class="role-card__role">
+        Requester
+      </div>
+
+      <div class="role-card__desc">
+
+        Requests access to records required
+        for patient treatment.
+
+      </div>
+
+    </div>
+
+
+    <div class="role-card">
+
+      <div
+        class="role-card__glyph"
+        data-icon="building2">
+      </div>
+
+      <div class="role-card__name">
+        Hospital
+      </div>
+
+      <div class="role-card__role">
+        Requester
+      </div>
+
+      <div class="role-card__desc">
+
+        Handles institutional access,
+        admissions and coordination.
+
+      </div>
+
+    </div>
+
+
+    <div class="role-card">
+
+      <div
+        class="role-card__glyph"
+        data-icon="umbrella">
+      </div>
+
+      <div class="role-card__name">
+        Insurance
+      </div>
+
+      <div class="role-card__role">
+        Requester
+      </div>
+
+      <div class="role-card__desc">
+
+        Verifies claims against explicitly
+        authorized medical records.
+
+      </div>
+
+    </div>
+
   </div>
+
 </section>
+
+
+<!-- =====================================================
+     PROJECT
+===================================================== -->
 
 <section class="section" id="project">
+
   <div class="section-head">
-    <p class="section-sub">Cardano Healthcare Vault — a decentralized EHR architecture combining off-chain speed with on-chain and zero-knowledge assurance.</p>
+
+    <p class="section-eyebrow">
+      Project
+    </p>
+
+    <h2 class="section-title">
+      Built as a working prototype.
+    </h2>
+
   </div>
+
+
   <div class="info-card">
+
+    <div></div>
+
     <div>
+
+      <div class="info-block-title">
+        Scope
       </div>
-    </div>
-    <div>
-      <div class="info-block-title">Scope</div>
+
       <div class="info-list">
-        <div class="info-list__row"><span>SDGs</span><span>SDG 3 &middot; SDG 9</span></div>
-        <div class="info-list__row"><span>Outcome</span><span>Working prototype</span></div>
-        <div class="info-list__row"><span>Target</span><span>Scopus conference paper</span></div>
-        <div class="info-list__row"><span>Compliance</span><span>HIPAA / GDPR-aligned</span></div>
+
+        <div class="info-list__row">
+          <span>SDGs</span>
+          <span>SDG 3 · SDG 9</span>
+        </div>
+
+        <div class="info-list__row">
+          <span>Outcome</span>
+          <span>Working prototype</span>
+        </div>
+
+        <div class="info-list__row">
+          <span>Target</span>
+          <span>Scopus conference paper</span>
+        </div>
+
+        <div class="info-list__row">
+          <span>Compliance</span>
+          <span>HIPAA / GDPR-aligned</span>
+        </div>
+
       </div>
+
     </div>
+
   </div>
+
 </section>
 
+
+<!-- =====================================================
+     CTA
+===================================================== -->
+
 <div class="cta-band">
-  <h2>See the whole pipeline live</h2>
-  <p>Upload a record, request access as another actor, and revoke it — every step streams from the real backend in real time.</p>
-  <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+
+  <h2>
+    See the pipeline live.
+  </h2>
+
+  <p>
+
+    Upload a record, request access as another actor,
+    and revoke it. Watch the architecture execute
+    in real time.
+
+  </p>
+
+  <a class="btn" href="/dashboard">
+
+    Launch Dashboard
+
+    <span
+      data-icon="chevronRight"
+      style="width:16px;height:16px;display:inline-flex">
+    </span>
+
+  </a>
+
 </div>
 
+
+<!-- =====================================================
+     FOOTER
+===================================================== -->
+
 <footer class="site-footer">
-  <p><strong>What's real vs. placeholder:</strong> AES-256-GCM encryption, RSA-OAEP key wrapping and the Hydra L2 head are genuinely executing on this server. Aiken, Midnight and Blockfrost run against the mocked/local scaffolding described in <code>.env.example</code> until real credentials are supplied.</p>
+
+  <p>
+
+    <strong>What's real vs. placeholder:</strong>
+
+    AES-256-GCM encryption, RSA-OAEP key wrapping and
+    the Hydra L2 head are genuinely executing on this server.
+    Aiken, Midnight and Blockfrost use the configured
+    scaffolding until real credentials are supplied.
+
+  </p>
+
 </footer>
+
 
 <script src="/icons.js" defer></script>
 <script src="/landing.js" defer></script>
+
 </body>
 </html>
