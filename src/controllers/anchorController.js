@@ -8,6 +8,16 @@ function validateRecordId(id) {
   return typeof id === 'string' && uuidValidate(id) && uuidVersion(id) === 4;
 }
 
+// Blockfrost returns [{ label, json_metadata }]; the anchor payload may sit
+// under any label and at any depth, so search every string value.
+function metadataContains(value, needle) {
+  if (!needle) return false;
+  if (typeof value === 'string') return value === needle;
+  if (Array.isArray(value)) return value.some((v) => metadataContains(v, needle));
+  if (value && typeof value === 'object') return Object.values(value).some((v) => metadataContains(v, needle));
+  return false;
+}
+
 async function confirmAnchorHandler(req, res, next) {
   try {
     const { recordId, onchainTxHash, signedPayload } = req.body;
@@ -25,8 +35,9 @@ async function confirmAnchorHandler(req, res, next) {
       return res.status(400).json({ error: `Record status is ${record.status}, expected pending_anchor` });
     }
 
-    // TODO: Verify onchainTxHash via Blockfrost or Lucid by querying the tx and checking metadata/datum
-    // For demo, we accept any txHash and mark as anchored
+    // Verify onchainTxHash via Blockfrost: the tx must exist and its metadata
+    // must carry this record's cidHash (from the anchorPayload returned by
+    // pin-and-anchor). Without a Blockfrost key (demo mode) any txHash is accepted.
     const projectId = process.env.BLOCKFROST_PROJECT_ID;
     if (projectId) {
       // cardano-testnet.blockfrost.io doesn't exist — the legacy combined
@@ -44,7 +55,18 @@ async function confirmAnchorHandler(req, res, next) {
           return res.status(400).json({ error: 'On-chain transaction not found or invalid' });
         }
         const txData = await response.json();
-        console.info(`Verified tx ${onchainTxHash} on chain:`, txData.hash);
+
+        const metaResponse = await fetch(`${baseUrl}/txs/${onchainTxHash}/metadata`, {
+          headers: { project_id: projectId },
+        });
+        const metadata = metaResponse.ok ? await metaResponse.json() : [];
+        if (!metadataContains(metadata, record.cidHash)) {
+          return res.status(400).json({
+            error: 'Transaction metadata does not anchor this record',
+            expectedCidHash: record.cidHash,
+          });
+        }
+        console.info(`Verified tx ${onchainTxHash} on chain anchors record ${recordId}:`, txData.hash);
       } catch (err) {
         console.error('Blockfrost verification failed:', err.message);
         return res.status(503).json({ error: 'Unable to verify on-chain tx at this time' });
@@ -68,4 +90,4 @@ async function confirmAnchorHandler(req, res, next) {
   }
 }
 
-module.exports = { confirmAnchorHandler };
+module.exports = { confirmAnchorHandler, metadataContains };
