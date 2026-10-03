@@ -100,7 +100,8 @@
     wallets: {},
     uploadFileChosen: false,
   };
-  var CARDANO_NETWORK_LABEL = 'testnet'; // must match server's CARDANO_NETWORK env var (see /api/config)
+  var CARDANO_NETWORK_LABEL = 'testnet'; // overwritten from the server's /api/config on boot
+  var SERVER_DEMO_MODE = false;          // ditto — enables the demo wallet fallback below
 
   // ---------------------------------------------------------------
   // Small helpers
@@ -140,6 +141,7 @@
   // ---------------------------------------------------------------
   async function connectRealWallet(actorId) {
     if (!window.cardano || !window.cardano.eternl) {
+      if (SERVER_DEMO_MODE) return connectDemoWallet(actorId);
       throw new Error('Eternl wallet not found — install it from https://eternl.io and reload this page.');
     }
     var api = await window.cardano.eternl.enable();
@@ -162,6 +164,18 @@
     } catch (e) { /* some wallets omit this on testnet; not fatal */ }
 
     state.wallets[actorId] = { api: api, address: address, balanceAda: balanceAda };
+    state.walletConnected[actorId] = true;
+    return state.wallets[actorId];
+  }
+
+  // Demo wallet — only offered when the server runs with DEMO_MODE=true,
+  // where walletService bypasses CIP-8 verification anyway. Lets the full
+  // pipeline be demoed in a browser without the Eternl extension.
+  function connectDemoWallet(actorId) {
+    var api = {
+      signData: async function () { return { key: 'demo-wallet', signature: 'demo-wallet' }; },
+    };
+    state.wallets[actorId] = { api: api, address: ACTOR_META[actorId].addr, balanceAda: '0.00', demo: true };
     state.walletConnected[actorId] = true;
     return state.wallets[actorId];
   }
@@ -419,7 +433,9 @@
       state.auditEvents = state.auditEvents || [];
     }
     renderAuditIfMounted();
-    renderOverviewRecentIfMounted();
+    // Full overview re-render (not just the recent list) so the "Last
+    // activity" stat card also picks up events that arrive after first paint.
+    renderOverviewIfMounted();
   }
 
   function filteredAuditEvents() {
@@ -1039,7 +1055,7 @@
         '<span class="icon-badge ' + roleAccent(actorId) + ' icon-badge--sm" data-icon="wallet"></span>' +
         '<div class="wallet-box__body">' +
           '<div class="wallet-box__addr">' + escapeHtml(shortAddr(wallet.address || meta.addr)) + '</div>' +
-          '<div class="wallet-box__hint">' + (wallet.balanceAda || '0.00') + ' ADA &middot; connected</div>' +
+          '<div class="wallet-box__hint">' + (wallet.demo ? 'demo wallet &middot; DEMO_MODE' : (wallet.balanceAda || '0.00') + ' ADA &middot; connected') + '</div>' +
         '</div>' +
         '<button class="ghost-btn" data-wallet-disconnect="' + actorId + '" type="button">disconnect</button>' +
       '</div>';
@@ -1061,7 +1077,7 @@
         connectBtn.disabled = true;
         connectBtn.textContent = 'Connecting…';
         connectRealWallet(actorId).then(function (wallet) {
-          toast(ACTOR_META[actorId].name + ' wallet connected — ' + shortAddr(wallet.address));
+          toast(ACTOR_META[actorId].name + (wallet.demo ? ' demo wallet connected (no Eternl found)' : ' wallet connected — ' + shortAddr(wallet.address)));
           var box = $('#walletBox', root);
           if (box) { box.outerHTML = walletWidgetHtml(actorId); bindWalletWidget(root, onChange); }
           if (onChange) onChange();
@@ -1095,5 +1111,9 @@
     loadRecords();
     loadAudit();
     renderSection('overview');
+    api('/api/config').then(function (cfg) {
+      SERVER_DEMO_MODE = !!cfg.demoMode;
+      if (cfg.network) CARDANO_NETWORK_LABEL = cfg.network;
+    }).catch(function () { /* keep defaults */ });
   });
 })();
