@@ -321,6 +321,38 @@ async function loadActorPublicKey(actorId) {
   }
 }
 
+/**
+ * Load actor's X25519 public key from filesystem (written by
+ * scripts/genActorX25519Keys.js as a base64-encoded 32-byte key).
+ * @param {string} actorId - Actor ID ('01', '02', '03', '04')
+ * @returns {Promise<Buffer>} 32-byte X25519 public key
+ */
+async function loadActorX25519PublicKey(actorId) {
+  const fs = require('fs').promises;
+  const path = require('path');
+
+  const actorLabels = {
+    '01': 'patient',
+    '02': 'doctor',
+    '03': 'hospital',
+    '04': 'insurance'
+  };
+
+  const label = actorLabels[actorId];
+  if (!label) {
+    throw new Error(`Invalid actorId: ${actorId}`);
+  }
+
+  const pubKeyPath = path.join(__dirname, '..', '..', 'scripts', 'keys', `actor-${actorId}-${label}-x25519-pub.key`);
+
+  try {
+    const raw = await fs.readFile(pubKeyPath, 'utf8');
+    return keyFromBase64(raw.trim());
+  } catch (err) {
+    throw new Error(`Failed to load X25519 public key for actor ${actorId} (run: node scripts/genActorX25519Keys.js): ${err.message}`);
+  }
+}
+
 module.exports = {
   // AES-GCM encryption
   generateCEK,
@@ -337,6 +369,7 @@ module.exports = {
   generateX25519KeyPair,
   wrapKeyX25519,
   unwrapKeyX25519,
+  loadActorX25519PublicKey,
   keyToBase64,
   keyFromBase64,
   

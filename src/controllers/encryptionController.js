@@ -1037,15 +1037,31 @@ async function rotateCEK(record, onStep = () => {}) {
     record.wrappedKeys = newWrappedKeys;
     onStep('re-wrap-keys', 'done', { reWrappedCount: newWrappedKeys.size });
 
-    console.info(`[CEK Rotation] Step 9/9: Updating on-chain anchor (TODO: implement real transaction)`);
+    console.info(`[CEK Rotation] Step 9/9: Updating on-chain anchor`);
     onStep('anchor-update', 'running', {});
-    // In production, submit new anchor transaction to Cardano with new cidHash
-    // For now, just log the intent
-    console.info(`[CEK Rotation]   - Would submit tx with: { recordId: ${record.recordId}, cidHash: ${record.cidHash} }`);
+    // The anchor tx must be signed by the owner's wallet, so the server can't
+    // submit it. If the record was anchored, the old anchor now points at a
+    // stale CID: drop back to pending_anchor and hand out the new payload,
+    // which the owner submits and confirms via POST /api/encrypt/confirm-anchor
+    // (same path as the initial upload).
+    const anchorPayload = {
+      recordId: record.recordId,
+      cid: record.cid,
+      cidHash: record.cidHash,
+      network: process.env.CARDANO_NETWORK || 'testnet',
+      timestamp: new Date().toISOString(),
+    };
+    const needsReanchor = record.status === 'anchored';
+    if (needsReanchor) {
+      record.status = 'pending_anchor';
+      record.onchainTx = undefined;
+    }
 
     // Save the updated record
     await record.save();
-    onStep('anchor-update', 'done', { note: 'on-chain anchor tx not yet implemented (placeholder)' });
+    onStep('anchor-update', 'done', needsReanchor
+      ? { anchorPayload, note: 'owner must submit a new anchor tx and call confirm-anchor' }
+      : { anchorPayload, note: 'record was not anchored on-chain; nothing to update' });
 
     // Zero out sensitive data from memory
     if (oldCEK) oldCEK.fill(0);
@@ -1179,8 +1195,8 @@ function uploadProgressHandler(req, res) {
  * Propose record sharing via Hydra Layer-2 (off-chain fast path)
  * 
  * Flow:
- * 1. Verify wallet signature (CIP-8)
- * 2. Load record and CEK from database
+ * 1. Load record from database
+ * 2. Verify the owner's wallet signature (CIP-8)
  * 3. Compute wrappedKeys for new actors using X25519
  * 4. Propose update to Hydra head
  * 5. Persist accepted snapshot to MongoDB
@@ -1192,8 +1208,9 @@ function uploadProgressHandler(req, res) {
  *   headId: string
  * }
  * 
- * TODO: Add rate limiting (max 10 proposals/minute per user)
- * TODO: For production, move wrapping to client-side for strict privacy
+ * Rate limited by sensitiveLimiter (see encryptionRoutes.js).
+ * Note: wrapping happens server-side; moving it client-side would keep the
+ * CEK off the server entirely.
  */
 async function proposeShareHandler(req, res) {
   try {
@@ -1220,62 +1237,67 @@ async function proposeShareHandler(req, res) {
       headId
     });
     
-    // Step 1: Verify wallet signature
-    // TODO: Use existing walletService.verifyWalletSignature for production
-    // For now, basic validation (mock accepts all)
-    if (!signature.key || !signature.signature) {
-      return res.status(401).json({
-        error: 'Invalid signature',
-        message: 'Signature must contain key and signature fields (CIP-8 format)'
-      });
-    }
-    
-    auditLogger.logger.info('[ProposeShare] Signature validated (mock mode)');
-    
-    // Step 2: Load record from database
-    const Record = require('../models/recordModel');
+    // Step 1: Load record from database (needed first: only the record's
+    // owner may share it, so the signature is checked against record.owner)
     const record = await Record.findOne({ recordId: payload.recordId });
-    
+
     if (!record) {
       return res.status(404).json({
         error: 'Record not found',
         recordId: payload.recordId
       });
     }
-    
+
     auditLogger.logger.info('[ProposeShare] Record loaded', {
       recordId: record.recordId,
       owner: record.owner,
-      currentActors: record.wrappedActors?.length || 0
+      currentActors: record.wrappedKeys ? record.wrappedKeys.size : 0
     });
-    
-    // Step 3: Compute wrappedKeys for new actors
-    // TODO: Replace with existing wrapKeyX25519 function if available
-    // For MVP, server-side wrapping (production should move to client-side)
-    
-    const { getTempCEK } = require('../services/cekManager');
-    const cek = await getTempCEK(record.recordId);
-    
+
+    // Step 2: Verify the owner's wallet signature over the exact payload sent
+    const isValidSignature = await walletService.verifySignature(
+      record.owner,
+      JSON.stringify(payload),
+      signature
+    );
+    if (!isValidSignature) {
+      return res.status(401).json({
+        error: 'Invalid signature',
+        message: 'Payload must be signed by the record owner (CIP-8)'
+      });
+    }
+
+    auditLogger.logger.info('[ProposeShare] Owner signature verified');
+
+    // Step 3: Compute wrappedKeys for new actors (X25519 ECDH + HKDF + AES-GCM).
+    // Each actor gets the CEK wrapped under its own X25519 public key, so the
+    // Hydra snapshot never carries the plaintext CEK.
+    const cek = await cekManager.getTempCEK(record.recordId);
+
     if (!cek) {
       return res.status(500).json({
         error: 'CEK not available',
         message: 'Record encryption key not found in memory. Please re-upload the record.'
       });
     }
-    
-    // TODO: Implement X25519 key wrapping
-    // For now, create mock wrapped keys structure
-    const wrappedKeys = payload.actors.map(actorLabel => {
-      // Convert frontend label to backend ID
-      const ACTOR_MAP = { patient: '01', doctor: '02', hospital: '03', insurance: '04' };
-      const actorId = ACTOR_MAP[actorLabel] || actorLabel;
-      
+
+    const ACTOR_MAP = { patient: '01', doctor: '02', hospital: '03', insurance: '04' };
+    const actorIds = payload.actors.map((label) => ACTOR_MAP[label] || label);
+    const unknown = actorIds.filter((id) => !ACTOR_IDS.has(id));
+    if (unknown.length) {
+      return res.status(400).json({ error: 'Unknown actors', actors: unknown });
+    }
+
+    const cekBuffer = Buffer.isBuffer(cek) ? cek : Buffer.from(cek, 'base64');
+    const wrappedKeys = await Promise.all(actorIds.map(async (actorId) => {
+      const recipientPub = await cryptoService.loadActorX25519PublicKey(actorId);
+      const { wrappedKey, ephemeralPublicKey } = cryptoService.wrapKeyX25519(cekBuffer, recipientPub);
       return {
         actorId,
-        wrappedKey: Buffer.from(cek).toString('base64'),  // TODO: Actual X25519 wrapping
-        ephemeralPublicKey: 'mock-ephemeral-pub-key'     // TODO: Real ephemeral key
+        wrappedKey: wrappedKey.toString('base64'),
+        ephemeralPublicKey: cryptoService.keyToBase64(ephemeralPublicKey)
       };
-    });
+    }));
     
     auditLogger.logger.info('[ProposeShare] Wrapped keys computed', {
       count: wrappedKeys.length,
@@ -1288,7 +1310,7 @@ async function proposeShareHandler(req, res) {
       recordId: payload.recordId,
       cidHash: payload.cidHash || record.cid,
       wrappedKeys,
-      author: signature.key || 'unknown-author',  // TODO: Extract from signature
+      author: record.owner,  // signature above was verified against this address
       timestamp: payload.timestamp || Date.now()
     };
     
