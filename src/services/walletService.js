@@ -1,74 +1,190 @@
 /**
  * walletService.js
- * 
- * Cardano wallet signature verification using Lucid.
+ *
+ * Cardano wallet signature verification.
  * Implements CIP-8 (message signing) and CIP-30 (wallet connector) standards.
- * 
+ *
  * Security: Validates wallet signatures to ensure only authorized actors can perform operations.
+ *
+ * Verification is done directly (COSE_Sign1 decode + Ed25519 via Node crypto +
+ * Blake2b-224 key hash) rather than through lucid-cardano, which is ESM-only
+ * and fails to load from this CommonJS codebase.
  */
 
-// Lucid-cardano has ESM import issues in CommonJS - use dynamic import workaround
-let Lucid, C;
-try {
-  const lucidImport = require('lucid-cardano');
-  Lucid = lucidImport.Lucid;
-  C = lucidImport.C;
-} catch (err) {
-  console.warn('⚠️  lucid-cardano import failed, wallet signature verification will use HMAC fallback');
-  Lucid = null;
-  C = null;
+const crypto = require('crypto');
+const cbor = require('cbor');
+const blake2b = require('blake2b');
+
+const blake2b224 = (data) => Buffer.from(blake2b(28).update(data).digest());
+
+// Signed payloads older than this are rejected (replay protection).
+const MAX_SIGNATURE_AGE_MS = 10 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// bech32 decoding (BIP-173, no 90-char limit — Cardano addresses are longer)
+// ---------------------------------------------------------------------------
+const BECH32_CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+
+function bech32Polymod(values) {
+  const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+  let chk = 1;
+  for (const v of values) {
+    const top = chk >> 25;
+    chk = ((chk & 0x1ffffff) << 5) ^ v;
+    for (let i = 0; i < 5; i++) if ((top >> i) & 1) chk ^= GEN[i];
+  }
+  return chk;
+}
+
+function bech32Decode(str) {
+  const lower = str.toLowerCase();
+  const pos = lower.lastIndexOf('1');
+  if (pos < 1 || pos + 7 > lower.length) throw new Error('Invalid bech32 string');
+  const hrp = lower.slice(0, pos);
+  const data = [];
+  for (const ch of lower.slice(pos + 1)) {
+    const v = BECH32_CHARSET.indexOf(ch);
+    if (v === -1) throw new Error('Invalid bech32 character');
+    data.push(v);
+  }
+  const hrpExpand = [...hrp].map((c) => c.charCodeAt(0) >> 5)
+    .concat([0], [...hrp].map((c) => c.charCodeAt(0) & 31));
+  if (bech32Polymod(hrpExpand.concat(data)) !== 1) throw new Error('Invalid bech32 checksum');
+
+  // Convert 5-bit groups to bytes
+  let acc = 0, bits = 0;
+  const out = [];
+  for (const v of data.slice(0, -6)) {
+    acc = (acc << 5) | v;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      out.push((acc >> bits) & 0xff);
+    }
+  }
+  return { hrp, bytes: Buffer.from(out) };
+}
+
+/** Accepts a bech32 or hex-encoded Cardano address, returns raw bytes. */
+function addressToBytes(address) {
+  if (/^[0-9a-fA-F]+$/.test(address)) return Buffer.from(address, 'hex');
+  return bech32Decode(address).bytes;
+}
+
+// CBOR maps decode to a Map when keys are mixed (ints + strings), else a plain object.
+function mapGet(m, key) {
+  if (m instanceof Map) return m.get(key);
+  return m ? m[key] : undefined;
+}
+
+function ed25519Verify(publicKey, message, signature) {
+  const spkiPrefix = Buffer.from('302a300506032b6570032100', 'hex');
+  const keyObject = crypto.createPublicKey({
+    key: Buffer.concat([spkiPrefix, publicKey]),
+    format: 'der',
+    type: 'spki',
+  });
+  return crypto.verify(null, message, keyObject, signature);
 }
 
 /**
- * Verify a CIP-8 signature from a Cardano wallet.
- * 
+ * Verify a CIP-8 signature from a Cardano wallet (CIP-30 signData output).
+ *
+ * Checks that:
+ *  1. the COSE_Sign1 Ed25519 signature is valid for the COSE_Key public key,
+ *  2. the signed payload is exactly `payload`,
+ *  3. the address in the protected header is `address`, and
+ *  4. `address`'s key-hash credential is Blake2b-224(public key),
+ *     so the signer actually controls that address.
+ *
  * @param {string} address - Cardano address (bech32 format, e.g., addr_test1...)
  * @param {string} payload - The message that was signed (stringified JSON)
- * @param {object} signedData - Signature object with { key, signature }
+ * @param {object} signedData - Signature object with { key, signature } (hex COSE_Key / COSE_Sign1)
  * @returns {Promise<boolean>} - True if signature is valid
  */
 async function verifyWalletSignature(address, payload, signedData) {
-  // Require Lucid - no HMAC fallback in production
-  if (!Lucid || !C) {
-    console.error('[walletService] lucid-cardano library not available - cannot verify wallet signatures');
-    throw new Error('Cardano wallet verification unavailable: lucid-cardano library required. Run: npm install lucid-cardano');
-  }
-  
   try {
-    // Initialize Lucid (network doesn't affect signature verification)
-    const lucid = await Lucid.new(undefined, 'Preprod');
-    
-    // Parse the signature components
-    const { key, signature } = signedData;
-    
+    const { key, signature } = signedData || {};
+
     if (!key || !signature) {
       console.warn('[walletService] Missing key or signature in signedData');
       return false;
     }
 
-    // Verify the signature using Lucid's built-in verification
-    const publicKey = C.PublicKey.from_hex(key);
-    const signatureBytes = C.Ed25519Signature.from_hex(signature);
-    const messageBytes = Buffer.from(payload);
+    // COSE_Key: { 1: 1 (OKP), 3: -8 (EdDSA), -1: 6 (Ed25519), -2: <public key> }
+    const coseKey = cbor.decodeFirstSync(Buffer.from(key, 'hex'));
+    const publicKey = Buffer.from(mapGet(coseKey, -2) || []);
+    if (publicKey.length !== 32) {
+      console.warn('[walletService] COSE_Key does not contain a 32-byte Ed25519 key');
+      return false;
+    }
 
-    // Verify signature
-    const isValid = publicKey.verify(messageBytes, signatureBytes);
-    
-    if (!isValid) {
+    // COSE_Sign1: [protected bstr, unprotected map, payload bstr, signature bstr] (optionally tag 18)
+    let sign1 = cbor.decodeFirstSync(Buffer.from(signature, 'hex'));
+    if (sign1 instanceof cbor.Tagged) sign1 = sign1.value;
+    if (!Array.isArray(sign1) || sign1.length !== 4) {
+      console.warn('[walletService] Malformed COSE_Sign1');
+      return false;
+    }
+    const [protectedBytes, unprotected, signedPayload, sigBytes] = sign1;
+
+    // 1. Ed25519 signature over Sig_structure
+    // (cbor's sync encode() emits truncated output on newer Node versions; encodeAsync is correct)
+    const sigStructure = await cbor.encodeAsync(['Signature1', protectedBytes, Buffer.alloc(0), signedPayload]);
+    if (!ed25519Verify(publicKey, sigStructure, Buffer.from(sigBytes))) {
       console.warn(`[walletService] Invalid signature for address ${address}`);
       return false;
     }
 
-    // Optionally verify address matches the public key
-    // (In production, you'd derive the address from the public key and compare)
-    
+    // 2. Payload must be what we expect (some wallets sign its Blake2b-224 hash)
+    const expected = Buffer.from(payload, 'utf8');
+    const hashed = mapGet(unprotected, 'hashed') === true;
+    const expectedSigned = hashed ? blake2b224(expected) : expected;
+    if (!signedPayload || !Buffer.from(signedPayload).equals(expectedSigned)) {
+      console.warn('[walletService] Signed payload does not match expected payload');
+      return false;
+    }
+
+    // 3. Protected header address must match the claimed address
+    const protectedMap = protectedBytes.length ? cbor.decodeFirstSync(protectedBytes) : null;
+    const headerAddress = mapGet(protectedMap, 'address');
+    const addrBytes = addressToBytes(address);
+    if (!headerAddress || !Buffer.from(headerAddress).equals(addrBytes)) {
+      console.warn('[walletService] Signing address does not match claimed address');
+      return false;
+    }
+
+    // 4. Address's key-hash credential must be the hash of the signing key.
+    // Header types 0,2,4,6 (base/pointer/enterprise with payment key) and
+    // 14 (reward address with stake key) keep the key hash at bytes 1..28.
+    const addrType = addrBytes[0] >> 4;
+    if (![0, 2, 4, 6, 14].includes(addrType)) {
+      console.warn(`[walletService] Unsupported address type ${addrType} (script address?)`);
+      return false;
+    }
+    const keyHash = blake2b224(publicKey);
+    if (!addrBytes.subarray(1, 29).equals(keyHash)) {
+      console.warn('[walletService] Signing key does not control the claimed address');
+      return false;
+    }
+
     console.info(`[walletService] Valid signature verified for address ${address}`);
     return true;
 
   } catch (error) {
     console.error('[walletService] Signature verification error:', error.message);
-    // No fallback in production - signature verification must succeed
-    throw new Error('Cardano wallet signature verification failed: ' + error.message);
+    return false;
+  }
+}
+
+/** Rejects payloads whose embedded timestamp is missing, in the future, or stale. */
+function isFreshPayload(payload) {
+  try {
+    const { timestamp } = JSON.parse(payload);
+    const age = Date.now() - Number(timestamp);
+    return Number.isFinite(age) && age >= -60 * 1000 && age <= MAX_SIGNATURE_AGE_MS;
+  } catch {
+    return false;
   }
 }
 
@@ -131,6 +247,11 @@ async function verifySignature(address, payload, signatureData) {
     throw new Error('Invalid signature format: Must provide { key, signature } from Cardano wallet (CIP-8)');
   }
 
+  if (!isFreshPayload(payload)) {
+    console.warn('[walletService] Rejected stale or undated signed payload');
+    return false;
+  }
+
   // Production mode: Verify wallet signature only
   return verifyWalletSignature(address, payload, signatureData);
 }
@@ -170,6 +291,7 @@ function getActorAddress(actorId) {
 
 module.exports = {
   verifyWalletSignature,
+  bech32Decode,
   verifySignature,
   createSignPayload,
   verifyHMACSignature,
