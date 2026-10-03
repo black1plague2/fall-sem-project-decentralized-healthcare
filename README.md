@@ -64,12 +64,28 @@ cd mock-hydra && npm start
 npm start        # or: npm run dev (nodemon)
 ```
 
-Then open **http://localhost:4000** — this serves the main demo UI
-(`public/index.html`), which walks the real pipeline live: switch between
+Then open **http://localhost:4000** for the landing page, and
+**http://localhost:4000/dashboard** for the working demo: switch between
 Patient/Doctor/Hospital/Insurance, upload & encrypt a file, request access,
-and revoke access, watching each backend step (and the real JSON it returns)
-stream in over Server-Sent Events. The status pills in the header show which
-layers are genuinely live vs. running on mock/local scaffolding.
+unlock, and revoke access, watching each backend step stream in live over
+Server-Sent Events.
+
+**Wallets:** with an [Eternl](https://eternl.io) extension installed, "Connect
+Wallet" uses it and signs every action with CIP-8. Without one, and only while
+the server runs with `DEMO_MODE=true`, the dashboard falls back to a demo
+wallet so the full pipeline can still be shown in any browser.
+
+```mermaid
+flowchart LR
+    P[Patient uploads file] --> E[Encrypt with AES-256-GCM]
+    E --> I[Store on IPFS]
+    E --> W[Wrap key for each chosen actor]
+    W --> H[Share via Hydra L2]
+    D[Doctor asks for access] --> C{Permission check<br/>Hydra, Aiken, Midnight, Blockfrost}
+    C -->|allowed| U[Doctor unwraps key and reads file]
+    C -->|denied| X[Access denied + audit log]
+    R[Patient revokes access] --> K[New key, file re-encrypted]
+```
 
 ## 📡 API Endpoints
 
@@ -110,6 +126,33 @@ Content-Type: application/json
 }
 ```
 
+### Share via Hydra L2
+```bash
+POST /api/encrypt/propose-share
+Content-Type: application/json
+
+{
+  "headId": "head-...",
+  "payload": { "operation": "share", "recordId": "uuid", "actors": ["doctor"], "timestamp": 1730000000000 },
+  "signature": { "key": "...", "signature": "..." }
+}
+```
+The payload must be signed by the record owner. Each actor gets the file key
+wrapped under their own X25519 public key, so the Hydra snapshot never holds
+the plain key.
+
+### Confirm On-chain Anchor
+```bash
+POST /api/encrypt/confirm-anchor
+Content-Type: application/json
+
+{ "recordId": "uuid", "onchainTxHash": "..." }
+```
+With a Blockfrost key set, the transaction must exist and its metadata must
+contain the record's `cidHash`. After a revoke rotates the key of an anchored
+record, the record goes back to `pending_anchor` until the owner anchors the
+new CID the same way.
+
 ### Hydra Health
 ```bash
 GET /api/hydra/health
@@ -125,17 +168,18 @@ GET /api/records/:recordId/metadata
 - **AES-256-GCM**: Military-grade authenticated encryption
 - **Key Isolation**: Separate wrapped key per actor
 - **CEK Rotation**: Automatic re-encryption on revocation
-- **Signature Verification**: CIP-8 wallet signatures
+- **Signature Verification**: CIP-8 wallet signatures, checked in full (Ed25519 signature, signed payload, signing address, and that the key owns that address), with a 10-minute freshness window
 - **Audit Logging**: Every operation logged with requestId
 - **No PHI Leakage**: No plaintext in logs or database
 
 ## 🎨 Demo Interface
 
-The primary demo is served at **`/`** (`public/index.html` + `vault.css` + `vault.js`) —
-see Quick Start above. A few earlier/alternate pages are still reachable for
-reference: `/app` (wallet-connect–oriented production UI), `/demo` (older
-dark-themed encryption-only demo), and the static `public/demo.html` /
-`public/api-demo.html` files.
+- `/` — landing page (`public/index.html` + `landing.css` + `landing.js`)
+- `/dashboard` — the main working demo (`public/dashboard.html` + `dashboard.css` + `dashboard.js`)
+- `/api/logs` — audit log viewer
+
+Older pages are still reachable for reference: `/app` (earlier wallet-connect
+UI), `/demo` (older encryption-only demo), and `public/api-demo.html`.
 
 ## 📁 Project Structure
 
@@ -154,7 +198,9 @@ backend/
 │   ├── models/          # MongoDB schemas
 │   ├── routes/          # Express routes
 │   └── utils/           # Helper functions
-├── public/              # Frontend — index.html/vault.css/vault.js is the primary demo
+├── public/              # Frontend — index.html (landing) + dashboard.html (main demo)
+├── api/                 # Vercel serverless entry point
+├── tests/               # Jest tests
 ├── contracts/           # Aiken smart contracts
 ├── mock-hydra/          # Hydra Layer-2 mock server
 ├── scripts/             # Utility scripts
@@ -184,7 +230,7 @@ backend/
 ## 🧪 Testing
 
 ```bash
-# Run all tests
+# Run all tests (crypto, CIP-8 signature checks, anchor checks, API smoke tests)
 npm test
 
 # Run demo flow
