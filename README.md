@@ -15,48 +15,34 @@ Decentralized Electronic Health Record (EHR) system with encrypted medical file 
 - **Audit Logging**: Winston-based 90-day retention, HIPAA/GDPR compliant
 - **Key Management**: In-memory CEK store with RSA-OAEP wrapping
 
-## 🚀 Quick Start
+## 🚀 Quick Start (demo mode — no real API keys needed)
 
 ### Prerequisites
 - Node.js 18+
-- MongoDB
-- Redis
-- Pinata API key (IPFS)
+- MongoDB running locally (or update `DB_URI` to a remote instance)
+- Redis is optional — `DISABLE_REDIS=true` uses an in-memory CEK cache instead
 
 ### Installation
 
 ```bash
-cd backend
 npm install
+cd mock-hydra && npm install && cd ..
 ```
 
 ### Configuration
 
-Create `.env` file:
-```env
-PORT=5000
-MONGODB_URI=mongodb://localhost:27017/cardano-health
-REDIS_URL=redis://localhost:6379
-PINATA_API_KEY=your_pinata_key
-PINATA_SECRET_API_KEY=your_pinata_secret
-MOCK_HYDRA=true
-```
-
-### Run
-
 ```bash
-# Start main server
-npm start
-
-# Start in dev mode (with nodemon)
-npm run dev
-
-# Start mock Hydra (in separate terminal)
-cd mock-hydra
-npm start
+cp .env.example .env
 ```
 
-### Generate Actor Keys
+The defaults in `.env.example` run the whole system in **DEMO_MODE**: encryption
+and Hydra L2 are genuinely live, everything else (IPFS, Midnight, Blockfrost,
+wallet signatures) runs against mocked/local scaffolding so the full pipeline
+works without any real credentials. See the comments in `.env.example` for
+where to plug in real Blockfrost/Pinata/Midnight keys later — flip
+`DEMO_MODE=false` once you do.
+
+### Generate actor keys (once)
 
 ```bash
 node scripts/genActorKeys.js
@@ -67,6 +53,23 @@ This generates RSA key pairs for 4 actors:
 - 02 - Doctor
 - 03 - Hospital
 - 04 - Insurance
+
+### Run
+
+```bash
+# Terminal 1 — mock Hydra L2 node
+cd mock-hydra && npm start
+
+# Terminal 2 — main server
+npm start        # or: npm run dev (nodemon)
+```
+
+Then open **http://localhost:4000** — this serves the main demo UI
+(`public/index.html`), which walks the real pipeline live: switch between
+Patient/Doctor/Hospital/Insurance, upload & encrypt a file, request access,
+and revoke access, watching each backend step (and the real JSON it returns)
+stream in over Server-Sent Events. The status pills in the header show which
+layers are genuinely live vs. running on mock/local scaffolding.
 
 ## 📡 API Endpoints
 
@@ -128,11 +131,11 @@ GET /api/records/:recordId/metadata
 
 ## 🎨 Demo Interface
 
-Open in browser:
-```
-http://localhost:5000/demo.html
-http://localhost:5000/api-demo.html
-```
+The primary demo is served at **`/`** (`public/index.html` + `vault.css` + `vault.js`) —
+see Quick Start above. A few earlier/alternate pages are still reachable for
+reference: `/app` (wallet-connect–oriented production UI), `/demo` (older
+dark-themed encryption-only demo), and the static `public/demo.html` /
+`public/api-demo.html` files.
 
 ## 📁 Project Structure
 
@@ -151,7 +154,7 @@ backend/
 │   ├── models/          # MongoDB schemas
 │   ├── routes/          # Express routes
 │   └── utils/           # Helper functions
-├── public/              # Frontend demos
+├── public/              # Frontend — index.html/vault.css/vault.js is the primary demo
 ├── contracts/           # Aiken smart contracts
 ├── mock-hydra/          # Hydra Layer-2 mock server
 ├── scripts/             # Utility scripts

@@ -29,10 +29,13 @@ async function confirmAnchorHandler(req, res, next) {
     // For demo, we accept any txHash and mark as anchored
     const projectId = process.env.BLOCKFROST_PROJECT_ID;
     if (projectId) {
+      // cardano-testnet.blockfrost.io doesn't exist — the legacy combined
+      // testnet was retired in favor of preview/preprod. Preprod is what
+      // BLOCKFROST_PROJECT_ID is provisioned for elsewhere in this app.
       const baseUrl =
         process.env.CARDANO_NETWORK === 'mainnet'
           ? 'https://cardano-mainnet.blockfrost.io/api/v0'
-          : 'https://cardano-testnet.blockfrost.io/api/v0';
+          : 'https://cardano-preprod.blockfrost.io/api/v0';
       try {
         const response = await fetch(`${baseUrl}/txs/${onchainTxHash}`, {
           headers: { project_id: projectId },

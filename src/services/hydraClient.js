@@ -285,8 +285,45 @@ function resetHydraClient() {
   hydraClientInstance = null;
 }
 
+// ============================================================
+// DEMO CONVENIENCE: lazily create a Hydra head for the 4 demo
+// actors so a fresh checkout works without manually creating one
+// via POST /api/hydra/heads first. Set DEFAULT_HYDRA_HEAD in .env
+// to pin a specific head instead (e.g. for a real hydra-node).
+// ============================================================
+let cachedDefaultHeadId = process.env.DEFAULT_HYDRA_HEAD || null;
+let pendingDefaultHead = null;
+
+async function getOrCreateDefaultHead() {
+  if (cachedDefaultHeadId) return cachedDefaultHeadId;
+  if (pendingDefaultHead) return pendingDefaultHead;
+
+  pendingDefaultHead = (async () => {
+    const client = getHydraClient();
+    const result = await client.createHead({
+      parties: ['01', '02', '03', '04'],
+      contestationPeriod: 60,
+    });
+    cachedDefaultHeadId = result.headId;
+    logger.info('[HydraClient] Auto-created demo head', { headId: cachedDefaultHeadId });
+    return cachedDefaultHeadId;
+  })();
+
+  try {
+    return await pendingDefaultHead;
+  } finally {
+    pendingDefaultHead = null;
+  }
+}
+
+function resetDefaultHead() {
+  cachedDefaultHeadId = process.env.DEFAULT_HYDRA_HEAD || null;
+}
+
 module.exports = {
   HydraClient,
   getHydraClient,
-  resetHydraClient
+  resetHydraClient,
+  getOrCreateDefaultHead,
+  resetDefaultHead,
 };

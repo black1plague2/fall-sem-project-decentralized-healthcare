@@ -242,8 +242,15 @@ async function checkPermissionViaZK(recordId, actorId) {
     const permissionData = midnightPermissions.get(recordId);
     
     if (!permissionData) {
-      console.log('[Midnight] No permission commitment found for record');
-      return { granted: false, reason: 'No Midnight commitment found' };
+      // No commitment stored yet is "we have no opinion", not "denied" —
+      // nothing currently calls storePermissionOnMidnight() at upload time,
+      // so this is the common case. Returning false here (instead of null)
+      // used to make permissionService.js treat it as a definitive denial
+      // and return immediately, which meant every access request was
+      // silently hard-blocked before it could ever reach Blockfrost or the
+      // local-DB demo fallback.
+      console.log('[Midnight] No permission commitment found for record — skipping to next layer');
+      return { granted: null, reason: 'No Midnight commitment found' };
     }
     
     // Step 2: Check if actor is in permission list (private check, never revealed)

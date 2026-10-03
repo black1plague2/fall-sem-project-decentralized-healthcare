@@ -105,6 +105,20 @@ function createSignPayload(operation, recordId, additionalData = {}) {
  * @returns {Promise<boolean>}
  */
 async function verifySignature(address, payload, signatureData) {
+  // ============================================================
+  // DEMO MODE PLACEHOLDER: bypasses real CIP-8 wallet verification
+  // so the pipeline can be demoed without an Eternl extension.
+  // Set DEMO_MODE=false in .env to require real wallet signatures
+  // (verifyWalletSignature below stays fully implemented for that).
+  // ============================================================
+  if (process.env.DEMO_MODE === 'true') {
+    if (!signatureData) {
+      return false;
+    }
+    console.warn(`[walletService] DEMO_MODE: bypassing wallet signature check for ${address ? address.substring(0, 20) + '...' : 'unknown address'}`);
+    return true;
+  }
+
   // Reject string signatures (HMAC demo mode)
   if (typeof signatureData === 'string') {
     console.error('[walletService] HMAC signatures not allowed in production - wallet signature required');

@@ -17,6 +17,52 @@ const AUDIT_EVENTS = {
   REVOCATION: 'REVOCATION',
 };
 
+// Console output goes to every environment; Vercel captures stdout/stderr as
+// function logs and its filesystem is read-only outside /tmp, so the File
+// transports (useful for local/Docker runs) are skipped there — the real
+// audit trail lives in MongoDB (see logAudit() below) regardless.
+const transports = [
+  new winston.transports.Console({
+    format: winston.format.combine(
+      winston.format.colorize(),
+      winston.format.printf(({ timestamp, level, message, ...meta }) => {
+        return `${timestamp} [${level}]: ${message} ${
+          Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''
+        }`;
+      })
+    ),
+  }),
+];
+
+if (!process.env.VERCEL) {
+  transports.push(
+    new winston.transports.File({
+      filename: path.join(process.cwd(), 'logs', 'combined.log'),
+      maxsize: 10485760, // 10MB
+      maxFiles: 30,
+      tailable: true,
+    }),
+    new winston.transports.File({
+      filename: path.join(process.cwd(), 'logs', 'audit.log'),
+      level: 'info',
+      maxsize: 10485760, // 10MB
+      maxFiles: 90, // 90-day retention for compliance
+      tailable: true,
+      format: winston.format.combine(
+        winston.format.timestamp(),
+        winston.format.json()
+      ),
+    }),
+    new winston.transports.File({
+      filename: path.join(process.cwd(), 'logs', 'error.log'),
+      level: 'error',
+      maxsize: 10485760, // 10MB
+      maxFiles: 90,
+      tailable: true,
+    })
+  );
+}
+
 // Create Winston logger
 const logger = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -29,46 +75,7 @@ const logger = winston.createLogger({
     service: 'cardano-health-vault',
     environment: process.env.NODE_ENV || 'development',
   },
-  transports: [
-    // Console output
-    new winston.transports.Console({
-      format: winston.format.combine(
-        winston.format.colorize(),
-        winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          return `${timestamp} [${level}]: ${message} ${
-            Object.keys(meta).length ? JSON.stringify(meta, null, 2) : ''
-          }`;
-        })
-      ),
-    }),
-    // File output - general logs
-    new winston.transports.File({
-      filename: path.join(process.cwd(), 'logs', 'combined.log'),
-      maxsize: 10485760, // 10MB
-      maxFiles: 30,
-      tailable: true,
-    }),
-    // File output - audit logs only
-    new winston.transports.File({
-      filename: path.join(process.cwd(), 'logs', 'audit.log'),
-      level: 'info',
-      maxsize: 10485760, // 10MB
-      maxFiles: 90, // 90-day retention for compliance
-      tailable: true,
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.json()
-      ),
-    }),
-    // Error logs
-    new winston.transports.File({
-      filename: path.join(process.cwd(), 'logs', 'error.log'),
-      level: 'error',
-      maxsize: 10485760, // 10MB
-      maxFiles: 90,
-      tailable: true,
-    }),
-  ],
+  transports,
 });
 
 /**
@@ -77,13 +84,28 @@ const logger = winston.createLogger({
  * @param {Object} details - Event details
  */
 function logAudit(event, details = {}) {
+  const timestamp = new Date();
   const auditEntry = {
     event,
-    timestamp: new Date().toISOString(),
+    timestamp: timestamp.toISOString(),
     ...details,
   };
-  
+
   logger.info('AUDIT', auditEntry);
+
+  // Also persist to MongoDB — the /api/logs/view (Audit Log dashboard
+  // page) reads from here, not from the local log files, because local
+  // files don't survive a serverless deployment (Vercel's filesystem is
+  // ephemeral and not shared across instances). Fire-and-forget: audit
+  // logging must never block or fail the request it's describing.
+  try {
+    const AuditLog = require('../models/auditLogModel');
+    AuditLog.create({ event, timestamp, details }).catch((err) => {
+      logger.error('[auditLogger] Failed to persist audit event to MongoDB', { event, error: err.message });
+    });
+  } catch (err) {
+    logger.error('[auditLogger] Failed to queue audit event for MongoDB', { event, error: err.message });
+  }
 }
 
 /**

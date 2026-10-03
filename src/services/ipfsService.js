@@ -46,10 +46,11 @@ async function uploadViaIpfsClient(buf) {
 }
 
 async function uploadViaPinata(buf) {
-  const key = process.env.PINATA_KEY;
-  const secret = process.env.PINATA_SECRET;
+  // Accept either naming (README uses the *_API_KEY form; kept both for compatibility)
+  const key = process.env.PINATA_API_KEY || process.env.PINATA_KEY;
+  const secret = process.env.PINATA_SECRET_API_KEY || process.env.PINATA_SECRET;
   if (!key || !secret) {
-    throw new Error('PINATA_KEY and PINATA_SECRET must be set for Pinata uploads');
+    throw new Error('PINATA_API_KEY and PINATA_SECRET_API_KEY must be set for Pinata uploads (see .env.example)');
   }
   const form = new FormDataImpl();
   form.append('file', new Blob([buf]), 'encrypted.bin');
@@ -71,10 +72,25 @@ async function uploadViaPinata(buf) {
   return json.IpfsHash;
 }
 
+// In-memory store so MOCK_IPFS_UPLOAD mode supports real round-trips
+// (upload -> download), needed for CEK rotation to work in a demo without
+// a real IPFS/Pinata connection.
+const mockStore = new Map();
+
 async function uploadMock(buf) {
   // Deterministic CID mock for offline demos; never use in production.
   const fakeHash = require('./cryptoService').sha256hex(buf).slice(0, 46);
-  return `bafy${fakeHash}`;
+  const cid = `bafy${fakeHash}`;
+  mockStore.set(cid, Buffer.from(buf));
+  return cid;
+}
+
+function downloadMock(cid) {
+  const buf = mockStore.get(cid);
+  if (!buf) {
+    throw new Error(`Mock CID not found: ${cid} (was it uploaded in this server process?)`);
+  }
+  return buf;
 }
 
 /**
@@ -119,9 +135,9 @@ async function downloadFromIPFS(cid) {
     throw new Error('Valid CID required for IPFS download');
   }
 
-  // Mock mode: cannot download (no real storage)
+  // Mock mode: served from the in-memory store populated by uploadMock()
   if (process.env.MOCK_IPFS_UPLOAD === 'true') {
-    throw new Error('Cannot download in MOCK_IPFS_UPLOAD mode - no real storage exists');
+    return downloadMock(cid);
   }
 
   const provider = getProvider();

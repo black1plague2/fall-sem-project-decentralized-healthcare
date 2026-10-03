@@ -504,9 +504,17 @@ function getLogViewerPage(req, res) {
 async function getLogsData(req, res) {
   try {
     const { type = 'combined', lines = 100, level = 'all', search = '' } = req.query;
-    
+
+    // Audit logs are read from MongoDB, not the local filesystem — the
+    // Audit Log dashboard page needs to work on serverless deployments
+    // (Vercel's filesystem is ephemeral and not shared across instances),
+    // and every audit event is already written there by auditLogger.js.
+    if (type === 'audit') {
+      return await getAuditLogsFromMongo(req, res);
+    }
+
     const logFile = path.join(process.cwd(), 'logs', `${type}.log`);
-    
+
     // Check if file exists
     if (!fs.existsSync(logFile)) {
       return res.json({
@@ -514,14 +522,14 @@ async function getLogsData(req, res) {
         stats: { total: 0, info: 0, warn: 0, error: 0 },
       });
     }
-    
+
     // Read log file
     const content = fs.readFileSync(logFile, 'utf8');
     const logLines = content.split('\n').filter(line => line.trim());
-    
+
     // Get last N lines
     const recentLines = logLines.slice(-parseInt(lines));
-    
+
     // Parse JSON logs
     let logs = recentLines
       .map(line => {
@@ -537,12 +545,12 @@ async function getLogsData(req, res) {
         }
       })
       .reverse(); // Show newest first
-    
+
     // Filter by level
     if (level !== 'all') {
       logs = logs.filter(log => log.level === level);
     }
-    
+
     // Filter by search term
     if (search) {
       const searchLower = search.toLowerCase();
@@ -551,7 +559,7 @@ async function getLogsData(req, res) {
         return logStr.includes(searchLower);
       });
     }
-    
+
     // Calculate stats
     const stats = {
       total: logs.length,
@@ -559,13 +567,41 @@ async function getLogsData(req, res) {
       warn: logs.filter(l => l.level === 'warn').length,
       error: logs.filter(l => l.level === 'error').length,
     };
-    
+
     res.json({ logs, stats });
-    
+
   } catch (error) {
     logger.error('Error fetching logs', { error: error.message, stack: error.stack });
     res.status(500).json({ error: 'Failed to fetch logs', message: error.message });
   }
+}
+
+async function getAuditLogsFromMongo(req, res) {
+  const { lines = 100, search = '' } = req.query;
+  const AuditLog = require('../models/auditLogModel');
+
+  const docs = await AuditLog.find({})
+    .sort({ timestamp: -1 })
+    .limit(Math.min(parseInt(lines, 10) || 100, 500))
+    .lean();
+
+  // Flatten back to the same shape the dashboard has always consumed:
+  // { event, timestamp, ...whatever fields logAudit() was called with }
+  let logs = docs.map((d) => ({
+    event: d.event,
+    timestamp: (d.timestamp instanceof Date ? d.timestamp : new Date(d.timestamp)).toISOString(),
+    level: 'info',
+    message: 'AUDIT',
+    ...(d.details || {}),
+  }));
+
+  if (search) {
+    const searchLower = search.toLowerCase();
+    logs = logs.filter((log) => JSON.stringify(log).toLowerCase().includes(searchLower));
+  }
+
+  const stats = { total: logs.length, info: logs.length, warn: 0, error: 0 };
+  res.json({ logs, stats });
 }
 
 module.exports = {

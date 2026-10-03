@@ -15,6 +15,11 @@ router.get('/demo', (req, res) => {
   res.sendFile(path.join(__dirname, '../../public/demo.html'));
 });
 
+// Main dashboard (sidebar-navigated app shell — upload, records, access, audit log, actors)
+router.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, '../../public/dashboard.html'));
+});
+
 // Midnight ZK health and statistics
 router.get('/midnight/health', (req, res) => {
   const { getMidnightStats } = require('../services/midnightService');

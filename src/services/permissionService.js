@@ -18,11 +18,17 @@ function getBlockfrostClient() {
   if (!projectId || projectId === 'replace') {
     return null;
   }
-  
+
+  // The SDK only recognizes mainnet/preview/preprod/sanchonet — there is no
+  // 'testnet' entry in its API_URLS map, so passing CARDANO_NETWORK's value
+  // straight through throws "Invalid network option" on every call. Every
+  // other place in this app (signing payloads, /api/config) keeps using the
+  // 'testnet' label, so translate only here rather than renaming it everywhere.
   const network = (process.env.CARDANO_NETWORK || 'testnet').toLowerCase();
+  const NETWORK_MAP = { mainnet: 'mainnet', preprod: 'preprod', preview: 'preview', sanchonet: 'sanchonet', testnet: 'preprod' };
   return new BlockFrostAPI({
     projectId,
-    network: network === 'mainnet' ? 'mainnet' : 'testnet',
+    network: NETWORK_MAP[network] || 'preprod',
   });
 }
 
@@ -153,32 +159,37 @@ async function queryBlockfrost(recordId, actorId) {
  * 
  * @param {string} recordId - Record UUID
  * @param {string} actorId - Actor ID (01, 02, 03, 04)
- * @param {string} requestId - Optional request correlation ID
- * @returns {Promise<{granted: boolean, source: 'hydra'|'aiken'|'midnight-zk'|'blockfrost', proof?: object}>}
+ * @param {object} [options]
+ * @param {string} [options.requestId] - Optional request correlation ID
+ * @param {object} [options.record] - Pre-loaded Mongoose Record document (avoids refetch, enables Aiken + demo fallback)
+ * @param {function} [options.onStep] - Optional callback(layerName, status, detail) fired as each layer is attempted, for live UI visualization
+ * @returns {Promise<{granted: boolean, source: 'hydra'|'aiken'|'midnight-zk'|'blockfrost'|'local-db-demo', proof?: object}>}
  */
-async function verifyPermission(recordId, actorId, requestId = null) {
+async function verifyPermission(recordId, actorId, options = {}) {
+  const { requestId = null, record = null, onStep = () => {} } = options;
   if (!recordId || !ACTOR_IDS.has(actorId)) {
     return { granted: false, source: 'validation', reason: 'Invalid recordId or actorId' };
   }
-  
+
   // Import audit logger
   const auditLogger = require('./auditLogger');
-  
+
   // Step 1: Check Hydra snapshots first (Layer-2 fast path)
+  onStep('hydra', 'running', { detail: 'Checking Hydra L2 off-chain snapshot (5-15ms target)' });
   try {
     const HydraSnapshot = require('../models/hydraSnapshotModel');
     const hydraResult = await HydraSnapshot.checkPermission(recordId, actorId);
-    
+
     if (hydraResult.snapshot) {
       console.log(`[permissionService] ✅ Permission found in Hydra L2 snapshot: ${hydraResult.snapshot.snapshotId}`);
-      
+
       const result = {
         granted: hydraResult.granted,
         source: 'hydra',
         snapshotId: hydraResult.snapshot.snapshotId,
         epoch: hydraResult.snapshot.epoch
       };
-      
+
       // Audit log permission check
       auditLogger.logPermissionCheck({
         recordId,
@@ -187,41 +198,49 @@ async function verifyPermission(recordId, actorId, requestId = null) {
         method: 'hydra-l2',
         requestId
       });
-      
+
+      onStep('hydra', result.granted ? 'granted' : 'denied', result);
       return result;
     }
-    
+
     console.log('[permissionService] No Hydra snapshot found, checking Aiken smart contract...');
-    
+    onStep('hydra', 'skipped', { reason: 'no snapshot for this record yet' });
+
   } catch (hydraError) {
     // Non-fatal: continue to Aiken fallback
     console.warn('[permissionService] Hydra check failed, continuing to Aiken:', hydraError.message);
+    onStep('hydra', 'error', { error: hydraError.message });
   }
-  
+
   // Step 2: Check Aiken smart contract (on-chain Plutus validator)
+  onStep('aiken', 'running', { detail: 'Checking Aiken/Plutus V3 on-chain validator' });
   try {
     const aikenStats = getAikenStats();
-    
+
     if (aikenStats.enabled && aikenStats.validatorLoaded) {
       console.log('[permissionService] Attempting Aiken smart contract verification (on-chain Plutus)...');
-      
+
       // Query Blockfrost for UTxOs at the script address
       const validatorHash = getValidatorHash();
       const scriptAddress = aikenStats.scriptAddress;
       const client = getBlockfrostClient();
-      
-      if (client && validatorHash && scriptAddress) {
+
+      // Aiken UTxO matching requires the record's IPFS CID; load it if not already provided
+      const Record = require('../models/recordModel');
+      const loadedRecord = record || (await Record.findOne({ recordId }).catch(() => null));
+
+      if (client && validatorHash && scriptAddress && loadedRecord) {
         try {
           // Query UTxOs at the Plutus script address
           console.log(`[permissionService] Querying UTxOs at script address ${scriptAddress.substring(0, 30)}...`);
           const utxos = await client.addressesUtxos(scriptAddress);
-          
+
           if (utxos && utxos.length > 0) {
             console.log(`[permissionService] Found ${utxos.length} UTxO(s) at Aiken script address`);
-            
+
             // Compute record ID hash to match against datum
-            const recordIdHash = sha256hex(record.ipfsCid);
-            
+            const recordIdHash = sha256hex(loadedRecord.cid || '');
+
             // Search for UTxO with matching permission datum
             for (const utxo of utxos) {
               if (!utxo.inline_datum) continue;
@@ -245,12 +264,12 @@ async function verifyPermission(recordId, actorId, requestId = null) {
                 
                 // For demo purposes, we'll check if the record exists in our database
                 // and assume the on-chain datum matches
-                if (record.recordId === recordIdHash) {
-                  const wrappedKey = record.wrappedKeys?.get(actorId);
-                  
+                if (loadedRecord.recordId === recordId) {
+                  const wrappedKey = loadedRecord.wrappedKeys?.get(actorId);
+
                   if (wrappedKey) {
-                    console.log(`[permissionService] ✅ Permission GRANTED via Aiken (actor=${actorId}, record=${record.recordId.substring(0, 16)}...)`);
-                    
+                    console.log(`[permissionService] ✅ Permission GRANTED via Aiken (actor=${actorId}, record=${loadedRecord.recordId.substring(0, 16)}...)`);
+
                     const result = {
                       granted: true,
                       source: 'aiken',
@@ -258,7 +277,7 @@ async function verifyPermission(recordId, actorId, requestId = null) {
                       validatorHash: validatorHash.substring(0, 16) + '...',
                       utxo: `${utxo.tx_hash.substring(0, 16)}...#${utxo.output_index}`
                     };
-                    
+
                     // Audit log permission check
                     auditLogger.logPermissionCheck({
                       recordId,
@@ -267,7 +286,8 @@ async function verifyPermission(recordId, actorId, requestId = null) {
                       method: 'aiken-l1',
                       requestId
                     });
-                    
+
+                    onStep('aiken', 'granted', result);
                     return result;
                   }
                 }
@@ -292,15 +312,18 @@ async function verifyPermission(recordId, actorId, requestId = null) {
     } else {
       console.log('[permissionService] Aiken smart contract disabled or validator not loaded, checking Midnight ZK...');
     }
+    onStep('aiken', aikenStats.enabled && aikenStats.validatorLoaded ? 'no-match' : 'disabled', aikenStats);
   } catch (aikenError) {
     // Non-fatal: continue to Midnight fallback
     console.warn('[permissionService] Aiken check failed, continuing to Midnight:', aikenError.message);
+    onStep('aiken', 'error', { error: aikenError.message });
   }
-  
+
   // Step 3: Check Midnight ZK (privacy-preserving path)
+  onStep('midnight', 'running', { detail: 'Checking Midnight ZK privacy-preserving proof' });
   try {
     const midnightStats = getMidnightStats();
-    
+
     if (midnightStats.enabled) {
       console.log('[permissionService] Attempting Midnight ZK verification (privacy-preserving)...');
       const zkResult = await checkPermissionViaZK(recordId, actorId);
@@ -325,17 +348,18 @@ async function verifyPermission(recordId, actorId, requestId = null) {
             method: 'midnight-zk',
             requestId
           });
-          
+
+          onStep('midnight', 'granted', result);
           return result;
         } else {
           console.log(`[permissionService] ❌ Permission DENIED via Midnight ZK: ${zkResult.reason}`);
-          
+
           const result = {
             granted: false,
             source: 'midnight-zk',
             reason: zkResult.reason
           };
-          
+
           // Audit log permission check
           auditLogger.logPermissionCheck({
             recordId,
@@ -344,77 +368,90 @@ async function verifyPermission(recordId, actorId, requestId = null) {
             method: 'midnight-zk',
             requestId
           });
-          
+
+          onStep('midnight', 'denied', result);
           return result;
         }
       }
+      onStep('midnight', 'skipped', { reason: 'no commitment stored for this record' });
     } else {
       console.log('[permissionService] Midnight ZK disabled, falling back to Blockfrost L1...');
+      onStep('midnight', 'disabled', midnightStats);
     }
-    
+
   } catch (midnightError) {
     // Non-fatal: continue to Blockfrost fallback
     console.warn('[permissionService] Midnight ZK check failed, falling back to Blockfrost:', midnightError.message);
+    onStep('midnight', 'error', { error: midnightError.message });
   }
-  
+
   // Step 4: Fallback to Blockfrost (Layer-1 on-chain verification - public)
+  //
+  // DEMO MODE SAFETY NET: this app doesn't actually anchor permission data
+  // on-chain anywhere yet (Aiken is disabled, Hydra/Midnight are mocks with
+  // nothing populating their state) — so a *correctly working* Blockfrost
+  // query will always come back empty, not because access should be denied,
+  // but because there's nothing on-chain to check yet. In DEMO_MODE this
+  // falls back to the local DB (same as when Blockfrost isn't configured at
+  // all) so a real Blockfrost call still happens and is honestly reported,
+  // while the demo itself keeps working end-to-end.
+  const demoFallback = async (reason) => {
+    console.warn(`[permissionService] DEMO_MODE: ${reason} — falling back to local DB record`);
+    const Record = require('../models/recordModel');
+    const loadedRecord = record || (await Record.findOne({ recordId }).catch(() => null));
+    const granted = Boolean(loadedRecord && loadedRecord.wrappedKeys && loadedRecord.wrappedKeys.get(actorId));
+    const result = {
+      granted,
+      source: 'local-db-demo',
+      reason: granted ? undefined : 'Actor has no wrapped key on this record',
+    };
+    auditLogger.logPermissionCheck({ recordId, actorId, result: granted, method: 'local-db-demo', requestId });
+    onStep('local-db-demo', granted ? 'granted' : 'denied', result);
+    return result;
+  };
+
+  onStep('blockfrost', 'running', { detail: 'Checking Blockfrost L1 public on-chain fallback' });
   const client = getBlockfrostClient();
   if (!client) {
+    onStep('blockfrost', 'disabled', { reason: 'no BLOCKFROST_PROJECT_ID' });
+    if (process.env.DEMO_MODE === 'true') {
+      return demoFallback('Blockfrost not configured');
+    }
     console.error('[permissionService] BLOCKFROST_PROJECT_ID not configured - cannot verify permissions');
     throw new Error('Cardano blockchain verification required: BLOCKFROST_PROJECT_ID must be set in environment');
   }
-  
+
   try {
     console.log('[permissionService] Attempting Blockfrost L1 verification (public on-chain)...');
     const onChainResult = await queryBlockfrost(recordId, actorId);
-    
-    if (onChainResult === null) {
-      // Permission datum not found on-chain
-      console.warn(`[permissionService] No permission datum found on-chain for ${recordId} actor ${actorId}`);
-      
-      const result = { granted: false, source: 'blockfrost', reason: 'No permission datum on-chain' };
-      
-      // Audit log permission check
-      auditLogger.logPermissionCheck({
-        recordId,
-        actorId,
-        result: false,
-        method: 'blockfrost-l1',
-        requestId
-      });
-      
+
+    if (onChainResult) {
+      console.log('[permissionService] ✅ Granted via Blockfrost L1');
+      const result = { granted: true, source: 'blockfrost' };
+      auditLogger.logPermissionCheck({ recordId, actorId, result: true, method: 'blockfrost-l1', requestId });
+      onStep('blockfrost', 'granted', result);
       return result;
     }
-    
-    console.log(`[permissionService] ${onChainResult ? '✅ Granted' : '❌ Denied'} via Blockfrost L1`);
-    
-    const result = {
-      granted: onChainResult,
-      source: 'blockfrost'
-    };
-    
-    // Audit log permission check
-    auditLogger.logPermissionCheck({
-      recordId,
-      actorId,
-      result: onChainResult,
-      method: 'blockfrost-l1',
-      requestId
-    });
-    
-    return result;
+
+    // onChainResult is `false` (no matching datum) or `null` (query error) —
+    // neither is real evidence of denial given nothing anchors on-chain yet.
+    console.warn(`[permissionService] No permission datum found on-chain for ${recordId} actor ${actorId}`);
+    auditLogger.logPermissionCheck({ recordId, actorId, result: false, method: 'blockfrost-l1', requestId });
+    onStep('blockfrost', 'no-match', { reason: 'No permission datum on-chain' });
+
+    if (process.env.DEMO_MODE === 'true') {
+      return demoFallback('no matching on-chain permission datum found');
+    }
+    return { granted: false, source: 'blockfrost', reason: 'No permission datum on-chain' };
   } catch (error) {
-    console.error('[permissionService] All permission verification layers failed:', error.message);
-    
-    // Audit log failed permission check
-    auditLogger.logPermissionCheck({
-      recordId,
-      actorId,
-      result: false,
-      method: 'all-layers-failed',
-      requestId
-    });
-    
+    console.error('[permissionService] Blockfrost query failed:', error.message);
+    onStep('blockfrost', 'error', { error: error.message });
+
+    if (process.env.DEMO_MODE === 'true') {
+      return demoFallback('Blockfrost query failed: ' + error.message);
+    }
+
+    auditLogger.logPermissionCheck({ recordId, actorId, result: false, method: 'all-layers-failed', requestId });
     throw new Error('Failed to verify permissions on all layers (Hydra, Midnight, Blockfrost): ' + error.message);
   }
 }

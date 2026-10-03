@@ -32,10 +32,17 @@ async function verifySignature(address, operation, recordId, signature, addition
   if (!signature) {
     return false;
   }
-  
-  // Create the payload that should have been signed
+
+  // createSignPayload() stamps its own timestamp unless additionalData
+  // supplies one (its ...spread runs last, so it wins). A real CIP-8
+  // signature is over the exact bytes the wallet signed client-side —
+  // if we let the server mint a fresh Date.now() here instead of reusing
+  // the client's, the reconstructed payload would essentially never match
+  // what was actually signed and every real wallet signature would fail
+  // verification. Callers must pass the client's `timestamp` through
+  // additionalData for this to work outside DEMO_MODE.
   const payload = walletService.createSignPayload(operation, recordId, additionalData);
-  
+
   // Verify using wallet service (handles both wallet and HMAC modes)
   return await walletService.verifySignature(address, payload, signature);
 }
@@ -43,35 +50,49 @@ async function verifySignature(address, operation, recordId, signature, addition
 async function uploadHandler(req, res, next) {
   const requestId = auditLogger.generateRequestId();
   const startTime = Date.now();
-  
+  const sessionId = req.body.sessionId || null;
+  const emit = (step, status, data = {}) => {
+    if (!sessionId) return;
+    progressService.sendUpdate(sessionId, { step, status, ...data });
+  };
+
   try {
+
     auditLogger.logger.info('📤 Upload request started', {
       requestId,
       fileName: req.file?.originalname,
       fileSize: req.file?.size,
       ownerAddr: req.body.ownerAddr
     });
-    
+    emit('validate', 'running', { detail: 'Checking file presence and size' });
+
     if (!req.file || !req.file.buffer) {
       auditLogger.logger.error('❌ Upload failed: No file provided', { requestId });
+      emit('validate', 'error', { error: 'No file provided' });
       return res.status(400).json({ error: 'Encrypted package requires a file upload' });
     }
     const ownerAddr = req.body.ownerAddr;
     if (!ownerAddr) {
       auditLogger.logger.error('❌ Upload failed: No owner address', { requestId });
+      emit('validate', 'error', { error: 'ownerAddr required' });
       return res.status(422).json({ error: 'ownerAddr is required' });
     }
-    
+    emit('validate', 'done', { fileName: req.file.originalname, originalSize: req.file.size });
+
     auditLogger.logger.info('🔑 Generating 256-bit AES-GCM encryption key...', { requestId });
+    emit('generate-cek', 'running', { detail: 'crypto.randomBytes(32) — 256-bit CEK' });
     const cek = await cryptoService.generateCEK();
-    
+    emit('generate-cek', 'done', { keyBits: 256 });
+
     auditLogger.logger.info('🔒 Encrypting file with AES-256-GCM...', {
       requestId,
       originalSize: req.file.buffer.length
     });
+    emit('encrypt', 'running', { detail: 'AES-256-GCM authenticated encryption' });
     const { package: encryptedPackage } = cryptoService.encryptAESGCM(req.file.buffer, cek);
     const recordId = uuidv4();
     cekManager.storeTempCEK(recordId, cek);
+    emit('encrypt', 'done', { recordId, encryptedSize: encryptedPackage.length });
 
     const shouldPin = AUTO_PIN || req.body.pinToIpfs === 'true';
     if (shouldPin) {
@@ -80,8 +101,10 @@ async function uploadHandler(req, res, next) {
         recordId,
         encryptedSize: encryptedPackage.length
       });
+      emit('ipfs-pin', 'running', { detail: `Pinning ${encryptedPackage.length} bytes to IPFS` });
       const { cid } = await ipfsService.uploadBufferToIPFS(encryptedPackage);
       const cidHash = cryptoService.sha256hex(cid);
+      emit('ipfs-pin', 'done', { cid, cidHash });
       
       // Log successful file upload
       auditLogger.logFileUploaded({
@@ -98,6 +121,7 @@ async function uploadHandler(req, res, next) {
       const ownerId = req.body.ownerId || actorIds[0];
       
       // Wrap CEK for each authorized actor
+      emit('wrap-keys', 'running', { detail: `RSA-OAEP wrapping CEK for ${actorIds.length} actor(s)` });
       const wrappedKeys = new Map();
       for (const actorId of actorIds) {
         if (ACTOR_IDS.has(actorId)) {
@@ -111,7 +135,9 @@ async function uploadHandler(req, res, next) {
           }
         }
       }
-      
+      emit('wrap-keys', 'done', { wrappedFor: Array.from(wrappedKeys.keys()) });
+
+      emit('db-save', 'running', { detail: 'Persisting record + wrapped keys to MongoDB' });
       const record = await Record.findOneAndUpdate(
         { recordId },
         {
@@ -134,6 +160,8 @@ async function uploadHandler(req, res, next) {
         { upsert: true, new: true, setDefaultsOnInsert: true }
       );
       
+      emit('db-save', 'done', { recordId, recordStatus: record.status });
+
       auditLogger.logger.info('✅ Upload complete and saved to database!', {
         recordId,
         cid,
@@ -141,32 +169,33 @@ async function uploadHandler(req, res, next) {
         encryptedSize: encryptedPackage.length,
         actors: actorIds
       });
-      
+
       // 🚀 AUTO-SHARE VIA HYDRA: Automatically propose sharing to Hydra Layer-2
       // This makes permission checks 100-400x faster (5-15ms vs 500-2000ms)
       const AUTO_SHARE_HYDRA = process.env.AUTO_SHARE_HYDRA === 'true';
-      const DEFAULT_HYDRA_HEAD = process.env.DEFAULT_HYDRA_HEAD;
-      
-      if (AUTO_SHARE_HYDRA && DEFAULT_HYDRA_HEAD) {
+
+      if (AUTO_SHARE_HYDRA) {
         try {
+          emit('hydra-share', 'running', { detail: 'Proposing state update to Hydra L2 head' });
+          const { getHydraClient, getOrCreateDefaultHead } = require('../services/hydraClient');
+          const hydraHeadId = await getOrCreateDefaultHead();
+          const hydraClient = getHydraClient();
+
           auditLogger.logger.info('🔄 Auto-sharing to Hydra Layer-2...', {
             recordId,
-            headId: DEFAULT_HYDRA_HEAD,
+            headId: hydraHeadId,
             actors: actorIds
           });
-          
-          const { getHydraClient } = require('../services/hydraClient');
-          const hydraClient = getHydraClient();
-          
+
           // Prepare wrapped keys for Hydra snapshot
           const wrappedKeysArray = actorIds.map(actorId => ({
             actorId,
             wrappedKey: wrappedKeys.get(actorId) || 'mock-wrapped-key',
             ephemeralPublicKey: 'mock-ephemeral-pub-key'
           }));
-          
+
           // Propose update to Hydra
-          const hydraResponse = await hydraClient.proposeUpdate(DEFAULT_HYDRA_HEAD, {
+          const hydraResponse = await hydraClient.proposeUpdate(hydraHeadId, {
             type: 'SHARE_RECORD',
             recordId,
             cidHash,
@@ -196,7 +225,7 @@ async function uploadHandler(req, res, next) {
           };
           
           const snapshot = new HydraSnapshot({
-            headId: DEFAULT_HYDRA_HEAD,
+            headId: hydraHeadId,
             snapshotId: hydraResponse.snapshotId,
             epoch: hydraResponse.epoch,
             snapshot: snapshotData,  // ✅ Required field!
@@ -212,35 +241,43 @@ async function uploadHandler(req, res, next) {
             acceptedAt: new Date()
           });
           await snapshot.save();
-          
+
           auditLogger.logger.info('✅ Auto-shared to Hydra!', {
             recordId,
             snapshotId: hydraResponse.snapshotId,
             actors: actorIds
           });
+          emit('hydra-share', 'done', { headId: hydraHeadId, snapshotId: hydraResponse.snapshotId, epoch: hydraResponse.epoch });
         } catch (hydraError) {
           // Non-blocking: Log error but don't fail upload
           auditLogger.logger.warn('⚠️ Hydra auto-share failed (non-blocking)', {
             recordId,
             error: hydraError.message
           });
+          emit('hydra-share', 'error', { error: hydraError.message });
         }
       }
-      
-      return res.status(200).json({ 
-        recordId, 
-        cid, 
-        cidHash, 
+
+      emit('complete', 'done', { recordId, cid, cidHash });
+      if (sessionId) progressService.closeSession(sessionId);
+
+      return res.status(200).json({
+        recordId,
+        cid,
+        cidHash,
         encryptedSize: encryptedPackage.length,
         originalSize: req.file.size,
         fileName: req.file.originalname,
         actors: actorIds,
-        hydraShared: AUTO_SHARE_HYDRA && DEFAULT_HYDRA_HEAD ? true : false
+        hydraShared: AUTO_SHARE_HYDRA
       });
     }
+    emit('complete', 'done', { recordId });
+    if (sessionId) progressService.closeSession(sessionId);
     return res.status(200).json({ recordId, encryptedPackageBase64: encryptedPackage.toString('base64') });
   } catch (error) {
     auditLogger.logger.error('❌ Upload failed with error:', { error: error.message, stack: error.stack });
+    if (sessionId) progressService.sendUpdate(sessionId, { step: 'error', status: 'error', error: error.message });
     return next(error);
   }
 }
@@ -293,7 +330,7 @@ async function wrapKeysHandler(req, res, next) {
   const startTime = Date.now();
   
   try {
-    const { recordId, ownerAddr, ownerSignature, actorPublicKeys = {} } = req.body;
+    const { recordId, ownerAddr, ownerSignature, actorPublicKeys = {}, timestamp } = req.body;
     
     auditLogger.logger.info('🔐 Wrap keys request received', {
       requestId,
@@ -324,7 +361,7 @@ async function wrapKeysHandler(req, res, next) {
       'wrapKeys', 
       recordId, 
       ownerSignature,
-      { actorIds: Object.keys(actorPublicKeys) }
+      { actorIds: Object.keys(actorPublicKeys), timestamp }
     );
     
     if (!isValidSignature) {
@@ -414,10 +451,15 @@ async function wrapKeysHandler(req, res, next) {
 async function accessRequestHandler(req, res, next) {
   const requestId = auditLogger.generateRequestId();
   const startTime = Date.now();
-  
+  const sessionId = req.body.sessionId || null;
+  const emit = (step, status, data = {}) => {
+    if (!sessionId) return;
+    progressService.sendUpdate(sessionId, { step, status, ...data });
+  };
+
   try {
-    const { recordId, actorId, actorAddr, actorSignature } = req.body;
-    
+    const { recordId, actorId, actorAddr, actorSignature, timestamp } = req.body;
+
     auditLogger.logger.info('🔍 Access request received', {
       requestId,
       recordId,
@@ -447,9 +489,9 @@ async function accessRequestHandler(req, res, next) {
       'accessRequest',
       recordId,
       actorSignature,
-      { actorId }
+      { actorId, timestamp }
     );
-    
+
     if (!isValidSignature) {
       auditLogger.logSignatureVerificationFailed({
         operation: 'accessRequest',
@@ -476,7 +518,11 @@ async function accessRequestHandler(req, res, next) {
       return res.status(404).json({ error: 'Actor does not have a wrapped CEK' });
     }
     
-    const permissionResult = await permissionService.verifyPermission(recordId, actorId);
+    const permissionResult = await permissionService.verifyPermission(recordId, actorId, {
+      requestId,
+      record,
+      onStep: (layer, status, detail) => emit(`layer:${layer}`, status, detail),
+    });
     if (!permissionResult.granted) {
       auditLogger.logAccessDenied({
         recordId,
@@ -485,9 +531,14 @@ async function accessRequestHandler(req, res, next) {
         reason: permissionResult.reason || 'Permission denied',
         requestId
       });
-      return res.status(403).json({ error: 'Permission denied by on-chain policy or Midnight proof' });
+      emit('complete', 'denied', { source: permissionResult.source, reason: permissionResult.reason });
+      if (sessionId) progressService.closeSession(sessionId);
+      return res.status(403).json({
+        error: 'Permission denied by on-chain policy or Midnight proof',
+        verificationMethod: permissionResult.source,
+      });
     }
-    
+
     // Log successful access grant
     const duration = Date.now() - startTime;
     auditLogger.logAccessGranted({
@@ -496,7 +547,7 @@ async function accessRequestHandler(req, res, next) {
       actorAddr: address,
       requestId
     });
-    
+
     auditLogger.logger.info('✅ Access granted', {
       requestId,
       recordId,
@@ -505,7 +556,10 @@ async function accessRequestHandler(req, res, next) {
       duration: `${duration}ms`,
       cid: record.cid
     });
-    
+
+    emit('complete', 'granted', { source: permissionResult.source, verificationTime: duration });
+    if (sessionId) progressService.closeSession(sessionId);
+
     return res.status(200).json({
       recordId,
       cid: record.cid,
@@ -520,6 +574,7 @@ async function accessRequestHandler(req, res, next) {
       error: error.message,
       stack: error.stack
     });
+    if (sessionId) progressService.sendUpdate(sessionId, { step: 'error', status: 'error', error: error.message });
     if (error.message.includes('Blockfrost')) {
       return res.status(503).json({ error: 'Permission service unavailable' });
     }
@@ -527,13 +582,112 @@ async function accessRequestHandler(req, res, next) {
   }
 }
 
+/**
+ * POST /api/encrypt/unlock
+ * Actually unwraps the CEK and decrypts the file for an authorized actor,
+ * returning the real plaintext as a download. This is the payoff step
+ * after /api/access/request: that endpoint only hands back the wrapped
+ * key (as a real wallet-based client would unwrap it itself); this one
+ * performs the unwrap+decrypt server-side for the browser demo, using the
+ * actor's private key from scripts/keys/ (demo-only — see cryptoService
+ * notes; production should unwrap client-side or via a hardware wallet).
+ */
+async function unlockHandler(req, res, next) {
+  const requestId = auditLogger.generateRequestId();
+  try {
+    const { recordId, actorId, actorAddr, actorSignature, timestamp } = req.body;
+
+    auditLogger.logger.info('🔓 Unlock request received', { requestId, recordId, actorId });
+
+    if (!validateRecordId(recordId)) {
+      return res.status(422).json({ error: 'Invalid recordId' });
+    }
+    if (!ACTOR_IDS.has(actorId)) {
+      return res.status(422).json({ error: 'actorId must be one of 01..04' });
+    }
+    if (!actorSignature) {
+      return res.status(401).json({ error: 'actorSignature required' });
+    }
+
+    const address = actorAddr || walletService.getActorAddress(actorId);
+    if (!address) {
+      return res.status(422).json({ error: 'Actor address required' });
+    }
+
+    const isValidSignature = await verifySignature(address, 'unlock', recordId, actorSignature, { actorId, timestamp });
+    if (!isValidSignature) {
+      auditLogger.logSignatureVerificationFailed({ operation: 'unlock', walletAddr: address, requestId, reason: 'Invalid signature' });
+      return res.status(401).json({ error: 'Actor signature invalid' });
+    }
+
+    const record = await Record.findOne({ recordId });
+    if (!record || !record.cid) {
+      return res.status(404).json({ error: 'Record not found or not pinned yet' });
+    }
+
+    const wrappedKeyBase64 = record.wrappedKeys.get(actorId);
+    if (!wrappedKeyBase64) {
+      auditLogger.logAccessDenied({ recordId, actorId, actorAddr: address, reason: 'No wrapped key found for actor', requestId });
+      return res.status(404).json({ error: 'Actor does not have a wrapped CEK' });
+    }
+
+    // Re-verify the same 4-layer cascade used by /api/access/request — an
+    // actor can't unlock a file just by having once had a wrapped key.
+    const permissionResult = await permissionService.verifyPermission(recordId, actorId, { requestId });
+    if (!permissionResult.granted) {
+      auditLogger.logAccessDenied({ recordId, actorId, actorAddr: address, reason: permissionResult.reason || 'Permission denied', requestId });
+      return res.status(403).json({ error: 'Permission denied by on-chain policy or Midnight proof' });
+    }
+
+    const isProduction = process.env.NODE_ENV === 'production';
+    const actorLabel = ACTOR_LABELS[parseInt(actorId, 10) - 1];
+    const fs = require('fs');
+    const path = require('path');
+    const keyPath = path.join(__dirname, '../../scripts/keys', `actor-${actorId}-${actorLabel}-priv.pem`);
+
+    let cek;
+    try {
+      const privateKeyPem = fs.readFileSync(keyPath, 'utf8');
+      const wrappedKeyBuffer = Buffer.from(wrappedKeyBase64, 'base64');
+      cek = cryptoService.unwrapKeyRSA(wrappedKeyBuffer, privateKeyPem);
+    } catch (keyErr) {
+      auditLogger.logger.error('❌ Unlock failed: could not unwrap CEK', { requestId, recordId, actorId, error: keyErr.message });
+      return res.status(500).json({ error: 'Failed to unwrap key for this actor', message: keyErr.message });
+    }
+
+    const encryptedPackage = await ipfsService.downloadFromIPFS(record.cid);
+    const plaintext = cryptoService.decryptAESGCM(encryptedPackage, cek);
+    cek.fill(0);
+
+    auditLogger.logAccessGranted({ recordId, actorId, actorAddr: address, requestId });
+    auditLogger.logger.info('✅ File unlocked and decrypted', {
+      requestId, recordId, actorId, verificationMethod: permissionResult.source, plaintextBytes: plaintext.length,
+    });
+
+    const filename = ((record.metadata && record.metadata.originalName) || 'record').replace(/["\r\n]/g, '');
+    const mimeType = (record.metadata && record.metadata.mimeType) || 'application/octet-stream';
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('X-Verification-Method', permissionResult.source);
+    return res.status(200).send(plaintext);
+  } catch (error) {
+    auditLogger.logger.error('❌ Unlock failed', { requestId, error: error.message, stack: error.stack });
+    return next(error);
+  }
+}
+
 async function revokeHandler(req, res, next) {
   const requestId = auditLogger.generateRequestId();
   const startTime = Date.now();
-  
+  const sessionId = req.body.sessionId || null;
+  const emit = (step, status, data = {}) => {
+    if (!sessionId) return;
+    progressService.sendUpdate(sessionId, { step, status, ...data });
+  };
+
   try {
-    const { recordId, actorId, ownerAddr, ownerSignature } = req.body;
-    
+    const { recordId, actorId, ownerAddr, ownerSignature, timestamp } = req.body;
+
     auditLogger.logger.info('🚫 Revoke request received', {
       requestId,
       recordId,
@@ -564,9 +718,9 @@ async function revokeHandler(req, res, next) {
       'revoke',
       recordId,
       ownerSignature,
-      { actorId }
+      { actorId, timestamp }
     );
-    
+
     if (!isValidSignature) {
       auditLogger.logSignatureVerificationFailed({
         operation: 'revoke',
@@ -577,11 +731,12 @@ async function revokeHandler(req, res, next) {
       return res.status(401).json({ error: 'Owner signature invalid' });
     }
     
+    emit('revoke-actor', 'running', { actorId, detail: 'Removing actor from wrapped-key map' });
     record.wrappedKeys.delete(actorId);
     if (record.wrappedKeys.size === 0) {
       record.status = 'revoked';
       await record.save();
-      
+
       auditLogger.logRevocation({
         recordId,
         actorId,
@@ -589,22 +744,27 @@ async function revokeHandler(req, res, next) {
         rotationStatus: 'skipped',
         requestId
       });
-      
-      return res.status(200).json({ 
-        record: record.toSafeJSON(), 
-        message: `Actor ${actorId} revoked. No actors remaining - rotation skipped.` 
+
+      emit('revoke-actor', 'done', { actorId, remainingActors: 0 });
+      emit('complete', 'done', { rotationStatus: 'skipped' });
+      if (sessionId) progressService.closeSession(sessionId);
+
+      return res.status(200).json({
+        record: record.toSafeJSON(),
+        message: `Actor ${actorId} revoked. No actors remaining - rotation skipped.`
       });
     }
-    
+
     await record.save();
-    
+    emit('revoke-actor', 'done', { actorId, remainingActors: record.wrappedKeys.size });
+
     // Attempt CEK rotation
     let rotationStatus = 'pending';
     let rotationError = null;
     let newCID = null;
-    
+
     try {
-      const rotationResult = await rotateCEK(record);
+      const rotationResult = await rotateCEK(record, (step, status, detail) => emit(`rotate:${step}`, status, detail));
       rotationStatus = 'completed';
       newCID = rotationResult?.newCID || record.cid;
       
@@ -646,16 +806,19 @@ async function revokeHandler(req, res, next) {
       rotationStatus,
       duration: `${duration}ms`
     });
-    
-    return res.status(200).json({ 
-      record: record.toSafeJSON(), 
+
+    emit('complete', 'done', { rotationStatus, oldCID, newCID });
+    if (sessionId) progressService.closeSession(sessionId);
+
+    return res.status(200).json({
+      record: record.toSafeJSON(),
       message: `Actor ${actorId} revoked`,
       rotation: {
         status: rotationStatus,
         oldCID,
         newCID,
         error: rotationError,
-        note: rotationStatus === 'failed' 
+        note: rotationStatus === 'failed'
           ? 'Actor removed from access list, but CEK rotation failed. Manual intervention may be required.'
           : 'CEK rotated successfully. Revoked actor cannot decrypt future uploads.'
       }
@@ -666,6 +829,7 @@ async function revokeHandler(req, res, next) {
       error: error.message,
       stack: error.stack
     });
+    if (sessionId) progressService.sendUpdate(sessionId, { step: 'error', status: 'error', error: error.message });
     return next(error);
   }
 }
@@ -701,11 +865,14 @@ async function metadataHandler(req, res, next) {
  * 9. Update on-chain anchor (in production)
  * 
  * @param {Object} record - Mongoose record document
+ * @param {function} [onStep] - Optional callback(stepName, status, detail) for live UI visualization
  * @returns {Promise<Object>} Updated record with new CID and wrapped keys
  */
-async function rotateCEK(record) {
+const ACTOR_LABELS = ['patient', 'doctor', 'hospital', 'insurance'];
+
+async function rotateCEK(record, onStep = () => {}) {
   console.info(`[CEK Rotation] Starting rotation for record ${record.recordId}`);
-  
+
   try {
     // Safety check: need at least one actor to re-wrap for
     if (record.wrappedKeys.size === 0) {
@@ -719,20 +886,23 @@ async function rotateCEK(record) {
     }
 
     console.info(`[CEK Rotation] Step 1/9: Downloading encrypted package from IPFS (CID: ${record.cid})`);
+    onStep('download', 'running', { cid: record.cid });
     const encryptedPackage = await ipfsService.downloadFromIPFS(record.cid);
-    
+    onStep('download', 'done', { bytes: encryptedPackage.length });
+
     // For demo purposes, we need an owner's wrapped key to unwrap the old CEK
     // In production, this would use HSM/KMS or secure owner key management
     // For now, we'll use the first available wrapped key (representing owner access)
     const firstActorId = Array.from(record.wrappedKeys.keys())[0];
     const firstWrappedKey = record.wrappedKeys.get(firstActorId);
-    
+
     if (!firstWrappedKey) {
       throw new Error('No wrapped keys available to unwrap old CEK');
     }
 
     console.info(`[CEK Rotation] Step 2/9: Unwrapping old CEK`);
-    
+    onStep('unwrap-old-cek', 'running', { actorId: firstActorId });
+
     let oldCEK;
     const isProduction = process.env.NODE_ENV === 'production';
     const kmsProvider = process.env.KMS_PROVIDER || 'mock';
@@ -770,8 +940,9 @@ async function rotateCEK(record) {
         
         const fs = require('fs');
         const path = require('path');
-        const keyPath = path.join(__dirname, '../../scripts/keys', `actor-${firstActorId}-patient-priv.pem`);
-        
+        const firstActorLabel = ACTOR_LABELS[parseInt(firstActorId, 10) - 1];
+        const keyPath = path.join(__dirname, '../../scripts/keys', `actor-${firstActorId}-${firstActorLabel}-priv.pem`);
+
         try {
           const privateKeyPem = fs.readFileSync(keyPath, 'utf8');
           const wrappedKeyBuffer = Buffer.from(firstWrappedKey, 'base64');
@@ -789,43 +960,56 @@ async function rotateCEK(record) {
       }
     }
 
+    onStep('unwrap-old-cek', 'done', {});
+
     console.info(`[CEK Rotation] Step 3/9: Decrypting package with old CEK`);
+    onStep('decrypt-old', 'running', {});
     const plaintext = cryptoService.decryptAESGCM(encryptedPackage, oldCEK);
-    
+    onStep('decrypt-old', 'done', { plaintextBytes: plaintext.length });
+
     console.info(`[CEK Rotation] Step 4/9: Generating new CEK`);
+    onStep('generate-new-cek', 'running', {});
     const newCEK = await cryptoService.generateCEK();
-    
+    onStep('generate-new-cek', 'done', { keyBits: 256 });
+
     console.info(`[CEK Rotation] Step 5/9: Re-encrypting with new CEK`);
+    onStep('re-encrypt', 'running', {});
     const { package: newEncryptedPackage } = cryptoService.encryptAESGCM(plaintext, newCEK);
-    
+    onStep('re-encrypt', 'done', { encryptedSize: newEncryptedPackage.length });
+
     console.info(`[CEK Rotation] Step 6/9: Uploading new package to IPFS`);
+    onStep('ipfs-reupload', 'running', {});
     const { cid: newCID } = await ipfsService.uploadBufferToIPFS(newEncryptedPackage);
-    
+    onStep('ipfs-reupload', 'done', { newCid: newCID });
+
     console.info(`[CEK Rotation] Step 7/9: Updating record with new CID (${newCID})`);
+    onStep('update-record', 'running', {});
     record.cid = newCID;
     record.cidHash = cryptoService.sha256hex(newCID);
-    
+    onStep('update-record', 'done', { newCid: newCID, newCidHash: record.cidHash });
+
     console.info(`[CEK Rotation] Step 8/9: Re-wrapping new CEK for ${record.wrappedKeys.size} remaining actors`);
-    
+    onStep('re-wrap-keys', 'running', { remainingActors: record.wrappedKeys.size });
+
     // Load actor public keys and re-wrap
     const actorIds = Array.from(record.wrappedKeys.keys());
     const newWrappedKeys = new Map();
-    
+
     for (const actorId of actorIds) {
       try {
         // In production, actors should use their own KMS keys or client-side wrapping
         // For development/demo, use filesystem keys
-        
+
         if (!isProduction) {
           const fs = require('fs');
           const path = require('path');
-          const actorLabel = ['patient', 'doctor', 'hospital', 'insurance'][parseInt(actorId) - 1];
+          const actorLabel = ACTOR_LABELS[parseInt(actorId, 10) - 1];
           const pubKeyPath = path.join(__dirname, '../../scripts/keys', `actor-${actorId}-${actorLabel}-pub.pem`);
           const publicKeyPem = fs.readFileSync(pubKeyPath, 'utf8');
-          
+
           const wrapped = cryptoService.wrapKeyRSA(newCEK, publicKeyPem);
           newWrappedKeys.set(actorId, wrapped.toString('base64'));
-          
+
           console.info(`[CEK Rotation]   - Re-wrapped for actor ${actorId} (filesystem key)`);
         } else {
           // In production, store a placeholder indicating client-side wrap required
@@ -851,20 +1035,23 @@ async function rotateCEK(record) {
     
     // Update record with new wrapped keys
     record.wrappedKeys = newWrappedKeys;
-    
+    onStep('re-wrap-keys', 'done', { reWrappedCount: newWrappedKeys.size });
+
     console.info(`[CEK Rotation] Step 9/9: Updating on-chain anchor (TODO: implement real transaction)`);
+    onStep('anchor-update', 'running', {});
     // In production, submit new anchor transaction to Cardano with new cidHash
     // For now, just log the intent
     console.info(`[CEK Rotation]   - Would submit tx with: { recordId: ${record.recordId}, cidHash: ${record.cidHash} }`);
-    
+
     // Save the updated record
     await record.save();
-    
+    onStep('anchor-update', 'done', { note: 'on-chain anchor tx not yet implemented (placeholder)' });
+
     // Zero out sensitive data from memory
     if (oldCEK) oldCEK.fill(0);
     if (newCEK) newCEK.fill(0);
     if (plaintext) plaintext.fill(0);
-    
+
     auditLogger.logger.info('[CEK Rotation] Rotation complete', {
       recordId: record.recordId,
       oldCID: record.cid,
@@ -964,40 +1151,27 @@ async function listRecordsHandler(req, res, next) {
 }
 
 /**
- * SSE endpoint for upload progress tracking
+ * SSE endpoint for live pipeline progress (upload / access / revoke all
+ * share this — see uploadProgressService.js). Backed by MongoDB rather
+ * than in-process memory so it's correct on serverless deployments where
+ * the triggering POST and this GET may run on different instances.
  * GET /api/encrypt/progress/:sessionId
  */
 function uploadProgressHandler(req, res) {
   const { sessionId } = req.params;
-  
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId required' });
+  }
+
   // Set up SSE headers
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-  
-  // Add client to session
-  const added = progressService.addClient(sessionId, res);
-  
-  if (!added) {
-    res.write('data: {"error":"Session not found"}\n\n');
-    res.end();
-    return;
-  }
-  
-  // Handle client disconnect
-  req.on('close', () => {
-    progressService.removeClient(sessionId, res);
-  });
-  
-  // Keep connection alive
-  const heartbeat = setInterval(() => {
-    res.write(': heartbeat\n\n');
-  }, 15000);
-  
-  req.on('close', () => {
-    clearInterval(heartbeat);
-  });
+  res.flushHeaders && res.flushHeaders();
+
+  progressService.streamSession(sessionId, res);
 }
 
 /**
@@ -1194,6 +1368,7 @@ module.exports = {
   pinAndAnchorHandler,
   wrapKeysHandler,
   accessRequestHandler,
+  unlockHandler,
   revokeHandler,
   metadataHandler,
   listRecordsHandler,

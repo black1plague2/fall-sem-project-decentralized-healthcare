@@ -45,3 +45,7 @@ temp/
 
 # Private keys
 scripts/keys/*.key
+scripts/keys/*.pem
+
+.vercel
+.env*

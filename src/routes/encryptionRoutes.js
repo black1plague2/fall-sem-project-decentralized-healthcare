@@ -5,6 +5,7 @@ const {
   pinAndAnchorHandler,
   wrapKeysHandler,
   accessRequestHandler,
+  unlockHandler,
   revokeHandler,
   metadataHandler,
   listRecordsHandler,
@@ -24,6 +25,10 @@ router.post('/api/encrypt/confirm-anchor', confirmAnchorHandler);
 router.get('/api/records', listRecordsHandler);
 router.get('/api/records/:recordId/metadata', metadataHandler);
 router.get('/api/encrypt/progress/:sessionId', uploadProgressHandler);
+// Same generic SSE-by-session mechanism, aliased for readability from the
+// access-request and revoke flows (all three share one progressService).
+router.get('/api/access/progress/:sessionId', uploadProgressHandler);
+router.get('/api/revoke/progress/:sessionId', uploadProgressHandler);
 
 // Sensitive routes (strict rate limiting + wallet-based limiting)
 router.post('/api/encrypt/wrap-keys', sensitiveLimiter, wrapKeysHandler);
@@ -32,5 +37,6 @@ router.post('/api/encrypt/propose-share', sensitiveLimiter, proposeShareHandler)
 
 // Authentication routes (auth rate limiting)
 router.post('/api/access/request', authLimiter, accessRequestHandler);
+router.post('/api/encrypt/unlock', sensitiveLimiter, unlockHandler);
 
 module.exports = router;
