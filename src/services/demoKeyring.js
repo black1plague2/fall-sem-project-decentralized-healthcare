@@ -78,7 +78,9 @@ async function getDemoKeyFiles() {
 
 /** Status for /api/config: whether a keyring exists, without touching it. */
 async function keyringStatus() {
-  if (mongoose.connection.readyState !== 1) return { available: false };
+  // /api/config runs before the DB middleware, so a cold instance may not be
+  // connected yet; the keyring is still used once a request connects.
+  if (mongoose.connection.readyState !== 1) return { available: process.env.DEMO_MODE === 'true', created: null };
   const doc = await DemoKeyring.findById(KEYRING_ID, { createdAt: 1 }).lean().catch(() => null);
   return { available: process.env.DEMO_MODE === 'true', created: doc ? doc.createdAt : null };
 }
