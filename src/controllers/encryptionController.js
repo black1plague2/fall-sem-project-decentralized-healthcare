@@ -645,15 +645,11 @@ async function unlockHandler(req, res, next) {
       return res.status(403).json({ error: 'Permission denied by on-chain policy or Midnight proof' });
     }
 
-    const isProduction = process.env.NODE_ENV === 'production';
     const actorLabel = ACTOR_LABELS[parseInt(actorId, 10) - 1];
-    const fs = require('fs');
-    const path = require('path');
-    const keyPath = path.join(__dirname, '../../scripts/keys', `actor-${actorId}-${actorLabel}-priv.pem`);
 
     let cek;
     try {
-      const privateKeyPem = fs.readFileSync(keyPath, 'utf8');
+      const privateKeyPem = await cryptoService.readActorKeyFile(`actor-${actorId}-${actorLabel}-priv.pem`);
       const wrappedKeyBuffer = Buffer.from(wrappedKeyBase64, 'base64');
       cek = cryptoService.unwrapKeyRSA(wrappedKeyBuffer, privateKeyPem);
     } catch (keyErr) {
@@ -929,7 +925,9 @@ async function rotateCEK(record, onStep = () => {}) {
     onStep('unwrap-old-cek', 'running', { actorId: firstActorId });
 
     let oldCEK;
-    const isProduction = process.env.NODE_ENV === 'production';
+    // A DEMO_MODE deployment (like the hosted demo) uses the demo actor keys
+    // even when NODE_ENV is production; real deployments still require KMS.
+    const isProduction = process.env.NODE_ENV === 'production' && process.env.DEMO_MODE !== 'true';
     const kmsProvider = process.env.KMS_PROVIDER || 'mock';
     
     if (isProduction && kmsProvider === 'mock') {
@@ -963,13 +961,10 @@ async function rotateCEK(record, onStep = () => {}) {
         console.warn(`[CEK Rotation] KMS unwrap failed, falling back to filesystem keys (dev mode only)`);
         console.warn(`[CEK Rotation] KMS Error: ${kmsErr.message}`);
         
-        const fs = require('fs');
-        const path = require('path');
         const firstActorLabel = ACTOR_LABELS[parseInt(firstActorId, 10) - 1];
-        const keyPath = path.join(__dirname, '../../scripts/keys', `actor-${firstActorId}-${firstActorLabel}-priv.pem`);
 
         try {
-          const privateKeyPem = fs.readFileSync(keyPath, 'utf8');
+          const privateKeyPem = await cryptoService.readActorKeyFile(`actor-${firstActorId}-${firstActorLabel}-priv.pem`);
           const wrappedKeyBuffer = Buffer.from(firstWrappedKey, 'base64');
           oldCEK = cryptoService.unwrapKeyRSA(wrappedKeyBuffer, privateKeyPem);
           
@@ -1026,11 +1021,8 @@ async function rotateCEK(record, onStep = () => {}) {
         // For development/demo, use filesystem keys
 
         if (!isProduction) {
-          const fs = require('fs');
-          const path = require('path');
           const actorLabel = ACTOR_LABELS[parseInt(actorId, 10) - 1];
-          const pubKeyPath = path.join(__dirname, '../../scripts/keys', `actor-${actorId}-${actorLabel}-pub.pem`);
-          const publicKeyPem = fs.readFileSync(pubKeyPath, 'utf8');
+          const publicKeyPem = await cryptoService.readActorKeyFile(`actor-${actorId}-${actorLabel}-pub.pem`);
 
           const wrapped = cryptoService.wrapKeyRSA(newCEK, publicKeyPem);
           newWrappedKeys.set(actorId, wrapped.toString('base64'));

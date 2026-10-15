@@ -290,15 +290,41 @@ function keyFromBase64(base64Key) {
   return key;
 }
 
+let envKeysCache = null;
+
+/**
+ * Reads a demo actor key file by name (e.g. "actor-02-doctor-priv.pem").
+ * Looks in scripts/keys/ first. Those files are gitignored, so a deploy built
+ * from GitHub (Vercel) won't have them; there, set DEMO_ACTOR_KEYS to the
+ * base64 JSON written by `node scripts/exportActorKeys.js`.
+ * @param {string} fileName
+ * @returns {Promise<string>} file contents
+ */
+async function readActorKeyFile(fileName) {
+  const fs = require('fs').promises;
+  const path = require('path');
+  try {
+    return await fs.readFile(path.join(__dirname, '..', '..', 'scripts', 'keys', fileName), 'utf8');
+  } catch (fsErr) {
+    if (!envKeysCache && process.env.DEMO_ACTOR_KEYS) {
+      try {
+        envKeysCache = JSON.parse(Buffer.from(process.env.DEMO_ACTOR_KEYS, 'base64').toString('utf8'));
+      } catch (e) {
+        throw new Error(`DEMO_ACTOR_KEYS is not valid base64 JSON: ${e.message}`);
+      }
+    }
+    if (envKeysCache && envKeysCache[fileName]) return envKeysCache[fileName];
+    throw new Error(`${fsErr.message} (and not in DEMO_ACTOR_KEYS)`);
+  }
+}
+
 /**
  * Load actor's public key from filesystem
  * @param {string} actorId - Actor ID ('01', '02', '03', '04')
  * @returns {Promise<string>} PEM-encoded public key
  */
 async function loadActorPublicKey(actorId) {
-  const fs = require('fs').promises;
-  const path = require('path');
-  
+
   const actorLabels = {
     '01': 'patient',
     '02': 'doctor',
@@ -311,11 +337,8 @@ async function loadActorPublicKey(actorId) {
     throw new Error(`Invalid actorId: ${actorId}`);
   }
   
-  const pubKeyPath = path.join(__dirname, '..', '..', 'scripts', 'keys', `actor-${actorId}-${label}-pub.pem`);
-  
   try {
-    const pubKey = await fs.readFile(pubKeyPath, 'utf8');
-    return pubKey;
+    return await readActorKeyFile(`actor-${actorId}-${label}-pub.pem`);
   } catch (err) {
     throw new Error(`Failed to load public key for actor ${actorId}: ${err.message}`);
   }
@@ -328,9 +351,6 @@ async function loadActorPublicKey(actorId) {
  * @returns {Promise<Buffer>} 32-byte X25519 public key
  */
 async function loadActorX25519PublicKey(actorId) {
-  const fs = require('fs').promises;
-  const path = require('path');
-
   const actorLabels = {
     '01': 'patient',
     '02': 'doctor',
@@ -343,10 +363,8 @@ async function loadActorX25519PublicKey(actorId) {
     throw new Error(`Invalid actorId: ${actorId}`);
   }
 
-  const pubKeyPath = path.join(__dirname, '..', '..', 'scripts', 'keys', `actor-${actorId}-${label}-x25519-pub.key`);
-
   try {
-    const raw = await fs.readFile(pubKeyPath, 'utf8');
+    const raw = await readActorKeyFile(`actor-${actorId}-${label}-x25519-pub.key`);
     return keyFromBase64(raw.trim());
   } catch (err) {
     throw new Error(`Failed to load X25519 public key for actor ${actorId} (run: node scripts/genActorX25519Keys.js): ${err.message}`);
@@ -354,6 +372,8 @@ async function loadActorX25519PublicKey(actorId) {
 }
 
 module.exports = {
+  readActorKeyFile,
+
   // AES-GCM encryption
   generateCEK,
   generateIV,

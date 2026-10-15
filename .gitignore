@@ -49,3 +49,6 @@ scripts/keys/*.pem
 
 .vercel
 .env*
+
+# Packed demo keys for the DEMO_ACTOR_KEYS env var (scripts/exportActorKeys.js)
+scripts/keys/DEMO_ACTOR_KEYS.txt
