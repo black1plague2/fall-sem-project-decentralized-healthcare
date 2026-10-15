@@ -57,12 +57,36 @@ This generates RSA key pairs for 4 actors:
 ### Run
 
 ```bash
-# Terminal 1 — mock Hydra L2 node
+# Optional: Terminal 1 — mock Hydra L2 node
 cd mock-hydra && npm start
 
 # Terminal 2 — main server
 npm start        # or: npm run dev (nodemon)
 ```
+
+You can skip the mock Hydra node. If no Hydra node answers, the server runs a
+**simulated Hydra head** in-process (this is what the hosted Vercel demo uses).
+The simulated head fills itself with made-up patients (`PT-xxxx`, tagged
+*synthetic*) so the L2 layer looks alive. Its timing is simulated too, but every
+snapshot is still signed by all four parties with real Ed25519 keys, and the
+signatures are checked again each time the head is read. Set
+`HYDRA_MODE=simulated` to always use it, or `HYDRA_MODE=remote` to turn the
+fallback off.
+
+### Guided demo (for presentations)
+
+Click **Run the full demo** on the landing page, or **Run demo** in the
+dashboard. It runs the whole story by itself against the real backend, with a
+caption bar explaining each step:
+
+1. The patient uploads a synthetic lab report and shares it with the Doctor and Hospital
+2. The upload shows up as a new snapshot on the Hydra head
+3. The Doctor is let in by Hydra L2 and decrypts the file
+4. Insurance is refused, because it was never given access
+5. The patient revokes the Hospital: the file gets a new key and Hydra is updated
+6. The Hospital is now locked out, and everything is in the audit log
+
+Space pauses, → skips ahead, Esc exits. `/dashboard?demo=1` starts it straight away.
 
 Then open **http://localhost:4000** for the landing page, and
 **http://localhost:4000/dashboard** for the working demo: switch between
@@ -158,6 +182,12 @@ new CID the same way.
 GET /api/hydra/health
 ```
 
+### Hydra Head Status (dashboard view)
+```bash
+GET /api/hydra/status      # mode, parties, epoch, recent snapshots, signature check
+POST /api/hydra/benchmark  # times real lookups against the L2 snapshot
+```
+
 ### Get Metadata
 ```bash
 GET /api/records/:recordId/metadata
@@ -176,6 +206,8 @@ GET /api/records/:recordId/metadata
 
 - `/` — landing page (`public/index.html` + `landing.css` + `landing.js`)
 - `/dashboard` — the main working demo (`public/dashboard.html` + `dashboard.css` + `dashboard.js`)
+- `/dashboard` → **Hydra L2** — live head view: snapshot feed, party signatures, L2 vs L1 timing
+- `public/demo-tour.js` — the guided demo
 - `/api/logs` — audit log viewer
 
 Older pages are still reachable for reference: `/app` (earlier wallet-connect

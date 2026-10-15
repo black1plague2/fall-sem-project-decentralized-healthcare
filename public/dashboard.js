@@ -26,6 +26,7 @@
     upload: { title: 'Upload & Encrypt' },
     records: { title: 'Records' },
     access: { title: 'Access & Permissions' },
+    hydra: { title: 'Hydra L2 Head' },
     audit: { title: 'Audit Log' },
     actors: { title: 'Actors' },
   };
@@ -59,6 +60,7 @@
     { key: 'update-record', label: 'Update record CID' },
     { key: 're-wrap-keys', label: 'Re-wrap remaining actors' },
     { key: 'anchor-update', label: 'Update on-chain anchor' },
+    { key: 'hydra-sync', label: 'Publish revocation — Hydra L2' },
   ];
 
   var EVENT_LABELS = {
@@ -99,6 +101,11 @@
     walletConnected: {},
     wallets: {},
     uploadFileChosen: false,
+    hydraTimer: null,
+    hydra: null,
+    hydraSeen: {},
+    benchmark: null,
+    config: null,
   };
   var CARDANO_NETWORK_LABEL = 'testnet'; // overwritten from the server's /api/config on boot
   var SERVER_DEMO_MODE = false;          // ditto — enables the demo wallet fallback below
@@ -370,6 +377,21 @@
   // ---------------------------------------------------------------
   var REVEAL_PACE_MS = 260;
   var streamToken = 0;
+  var streamState = { queue: [], draining: false, closed: true, lastEventAt: 0 };
+
+  // Resolves once the current progress stream has closed and every queued
+  // event has been revealed — used by the guided demo to pace itself.
+  function waitForStream(timeoutMs) {
+    var deadline = Date.now() + (timeoutMs || 20000);
+    return new Promise(function (resolve) {
+      (function check() {
+        var idle = streamState.closed && !streamState.draining && !streamState.queue.length;
+        var quiet = Date.now() - streamState.lastEventAt > 1500 && !streamState.draining && !streamState.queue.length;
+        if (idle || quiet || Date.now() > deadline) return resolve();
+        setTimeout(check, 120);
+      })();
+    });
+  }
 
   function openProgressStream(kind, sid, onEvent) {
     if (state.activeES) { try { state.activeES.close(); } catch (e) {} }
@@ -379,14 +401,16 @@
     state.activeES = es;
 
     var queue = [];
-    var draining = false;
+    streamState = { queue: queue, draining: false, closed: false, lastEventAt: Date.now() };
+    var mine = streamState;
     function drain() {
-      if (draining) return;
-      draining = true;
+      if (mine.draining) return;
+      mine.draining = true;
       (function step() {
-        if (myToken !== streamToken) { draining = false; queue.length = 0; return; }
-        if (!queue.length) { draining = false; return; }
+        if (myToken !== streamToken) { mine.draining = false; queue.length = 0; return; }
+        if (!queue.length) { mine.draining = false; return; }
         var item = queue.shift();
+        mine.lastEventAt = Date.now();
         onEvent(item.step, item.status, item.data);
         setTimeout(step, REVEAL_PACE_MS);
       })();
@@ -398,10 +422,12 @@
       try { data = JSON.parse(ev.data); } catch (e) { return; }
       if (data.status === 'complete' && !data.step) {
         es.close();
+        mine.closed = true;
         if (state.activeES === es) state.activeES = null;
         return;
       }
       if (!data.step) return;
+      mine.lastEventAt = Date.now();
       queue.push({ step: data.step, status: data.status, data: data });
       drain();
     };
@@ -468,6 +494,7 @@
   }
 
   function goToSection(id) {
+    if (id !== 'hydra') stopHydraPolling();
     state.section = id;
     $all('.dash-nav__item').forEach(function (b) { b.classList.toggle('is-active', b.dataset.section === id); });
     renderSection(id);
@@ -481,6 +508,7 @@
     else if (id === 'upload') renderUploadSection(content);
     else if (id === 'records') renderRecordsSection(content);
     else if (id === 'access') renderAccessSection(content);
+    else if (id === 'hydra') renderHydraSection(content);
     else if (id === 'audit') renderAuditSection(content);
     else if (id === 'actors') renderActorsSection(content);
     injectIcons(content);
@@ -497,6 +525,12 @@
     var lastEvent = state.auditEvents[0];
 
     content.innerHTML =
+      '<div class="demo-callout">' +
+        '<div class="demo-callout__text"><span class="demo-callout__kicker">Presenting?</span>' +
+        '<strong>Watch the whole system run by itself</strong>' +
+        '<span>Upload, Hydra L2 sharing, the 4-layer permission check, decryption, revocation with key rotation, and the audit trail, narrated step by step.</span></div>' +
+        '<button class="btn btn--demo" data-start-demo type="button"><span data-icon="play" class="btn__icon"></span> Run full demo</button>' +
+      '</div>' +
       '<div class="stat-grid" id="overviewStats">' +
         statCard('Total records', total, 'in this vault') +
         statCard('Active grants', anchored, 'uploaded / anchored') +
@@ -512,16 +546,45 @@
           '<button class="btn btn--ghost-outline" data-goto="audit">View audit log</button>' +
         '</div>' +
       '</div>' +
-      '<div class="panel" style="margin-top:22px">' +
-        panelHeadHtml('clipboardList', 'Recent activity', null, 'last 5 events', null) +
-        '<div id="overviewRecent"></div>' +
+      '<div class="two-col two-col--even" style="margin-top:22px">' +
+        '<div class="panel">' +
+          panelHeadHtml('network', 'Verification layers', null, 'fastest → most authoritative', null) +
+          '<div class="layer-ladder">' + layerLadderHtml() + '</div>' +
+        '</div>' +
+        '<div class="panel">' +
+          panelHeadHtml('clipboardList', 'Recent activity', null, 'last 5 events', null) +
+          '<div id="overviewRecent"></div>' +
+        '</div>' +
       '</div>';
 
     $all('[data-goto]', content).forEach(function (b) {
       b.addEventListener('click', function () { goToSection(b.dataset.goto); });
     });
+    $all('[data-start-demo]', content).forEach(function (b) {
+      b.addEventListener('click', function () { if (window.VaultTour) window.VaultTour.start(); });
+    });
+    $all('[data-layer-goto]', content).forEach(function (b) {
+      b.addEventListener('click', function () { goToSection('hydra'); });
+    });
     renderOverviewRecentIfMounted();
     injectIcons(content);
+  }
+  function layerLadderHtml() {
+    var layers = state.config && state.config.layers || {};
+    var rows = [
+      { key: 'hydra', name: 'Hydra L2', icon: 'zap', time: '~10 ms', what: 'Off-chain head snapshot' },
+      { key: 'aiken', name: 'Aiken L1', icon: 'fileLock2', time: '~2 s', what: 'Plutus V3 validator' },
+      { key: 'midnight', name: 'Midnight ZK', icon: 'eyeOff', time: '~1 s', what: 'Zero-knowledge proof' },
+      { key: 'blockfrost', name: 'Blockfrost L1', icon: 'link2', time: '0.5–2 s', what: 'Public chain query' },
+    ];
+    return rows.map(function (r, i) {
+      var mode = (layers[r.key] || {}).mode || '…';
+      return '<div class="ladder-row"' + (r.key === 'hydra' ? ' data-layer-goto role="button" tabindex="0"' : '') + '>' +
+        '<span class="ladder-row__step">' + (i + 1) + '</span>' +
+        '<span class="icon-badge icon-badge--' + r.key + ' icon-badge--sm" data-icon="' + r.icon + '"></span>' +
+        '<div class="ladder-row__body"><div class="ladder-row__name">' + r.name + '</div><div class="ladder-row__what">' + r.what + ' · ' + r.time + '</div></div>' +
+        '<span class="mode-pill mode-pill--' + escapeHtml(mode) + '">' + escapeHtml(mode) + '</span></div>';
+    }).join('');
   }
   function statCard(label, value, sub) {
     return '<div class="stat-card"><div class="stat-card__label">' + escapeHtml(label) + '</div>' +
@@ -639,8 +702,10 @@
       toast('Record encrypted & anchored — ' + shortId(res.recordId));
       await loadRecords();
       loadAudit();
+      return { ok: true, data: res };
     } catch (err) {
       toast('Upload failed: ' + err.message, true);
+      return { ok: false, error: err };
     } finally {
       if ($('#uploadBtn')) $('#uploadBtn').disabled = false;
     }
@@ -734,8 +799,17 @@
         $('#unlockBtn').addEventListener('click', function () { runUnlock(recordId, state.actorId); });
       }
       loadAudit();
+      return { ok: true, data: res };
     } catch (err) {
       toast('Access denied: ' + err.message, true);
+      var denyArea = $('#unlockArea');
+      if (denyArea) {
+        denyArea.innerHTML = '<div class="deny-card"><span class="icon-badge icon-badge--sm deny-card__icon" data-icon="xCircle"></span>' +
+          '<div><div class="deny-card__title">Access refused</div><div class="deny-card__meta">' + escapeHtml(err.message) + '</div></div></div>';
+        injectIcons(denyArea);
+      }
+      loadAudit();
+      return { ok: false, error: err };
     } finally {
       if ($('#requestBtn')) $('#requestBtn').disabled = false;
     }
@@ -791,9 +865,11 @@
       }
       toast('Decrypted for ' + meta.name + ' — ' + filename);
       loadAudit();
+      return { ok: true, filename: filename };
     } catch (err) {
       if (area) area.innerHTML = '<p class="empty-note">Unlock failed: ' + escapeHtml(err.message) + '</p>';
       toast('Unlock failed: ' + err.message, true);
+      return { ok: false, error: err };
     }
   }
 
@@ -880,8 +956,10 @@
       toast(res.message + ' — ' + res.rotation.status);
       await loadRecords();
       loadAudit();
+      return { ok: true, data: res };
     } catch (err) {
       toast('Revoke failed: ' + err.message, true);
+      return { ok: false, error: err };
     }
   }
 
@@ -1009,6 +1087,181 @@
   }
 
   // ---------------------------------------------------------------
+  // Hydra L2 section — live head view (real node, or the in-process
+  // simulator with synthetic traffic when no node is reachable)
+  // ---------------------------------------------------------------
+  var UPDATE_TYPE_LABEL = { SHARE_RECORD: 'share', GRANT_ACTOR: 'grant', REVOKE_ACTOR: 'revoke' };
+
+  function renderHydraSection(content) {
+    stopAuditPolling();
+    content.innerHTML =
+      '<div class="hydra-banner" id="hydraBanner"></div>' +
+      '<div class="stat-grid" id="hydraStats">' +
+        statCard('Head', '…', 'connecting') + statCard('Epoch', '…', '') + statCard('Avg confirm', '…', '') + statCard('Tx / minute', '…', '') +
+      '</div>' +
+      '<div class="two-col two-col--even">' +
+        '<div class="panel">' +
+          panelHeadHtml('activity', 'Live snapshot feed', null, 'newest first', 'hydraFeedHint', 'icon-badge--hydra') +
+          '<div class="snap-feed" id="snapFeed"><p class="empty-note">Loading head state…</p></div>' +
+        '</div>' +
+        '<div class="stack">' +
+          '<div class="panel">' +
+            panelHeadHtml('penLine', 'Head parties', null, 'Ed25519 multi-sig', null) +
+            '<div class="party-list" id="partyList"></div>' +
+          '</div>' +
+          '<div class="panel">' +
+            '<div class="panel-head"><div class="panel-head__title"><span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="gauge"></span><h2>L2 vs L1 lookup time</h2></div>' +
+            '<button class="ghost-btn" id="benchBtn" type="button">run benchmark</button></div>' +
+            '<div class="bench" id="benchMount"></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+    injectIcons(content);
+    $('#benchBtn').addEventListener('click', runBenchmark);
+    renderBenchmark();
+    loadHydra();
+    stopHydraPolling();
+    state.hydraTimer = setInterval(loadHydra, 2500);
+  }
+
+  function stopHydraPolling() {
+    if (state.hydraTimer) { clearInterval(state.hydraTimer); state.hydraTimer = null; }
+  }
+
+  async function loadHydra() {
+    try {
+      state.hydra = await api('/api/hydra/status');
+    } catch (e) {
+      state.hydra = { error: e.message };
+    }
+    renderHydraIfMounted();
+    updateHydraNavBadge();
+  }
+
+  function updateHydraNavBadge() {
+    var badge = $('#hydraNavLive');
+    if (!badge || !state.hydra || state.hydra.error) return;
+    badge.textContent = 'e' + state.hydra.epoch;
+  }
+
+  function renderHydraIfMounted() {
+    var feed = $('#snapFeed');
+    if (!feed) return;
+    var h = state.hydra;
+    if (!h) return;
+    if (h.error) { feed.innerHTML = '<p class="empty-note">Hydra head unavailable: ' + escapeHtml(h.error) + '</p>'; return; }
+
+    var sim = h.mode === 'simulated';
+    $('#hydraBanner').innerHTML =
+      '<span class="mode-tag mode-tag--' + (sim ? 'sim' : 'live') + '">' + (sim ? 'Simulated head' : 'Hydra node') + '</span>' +
+      '<span>' + (sim
+        ? 'No hydra-node is reachable from this deployment, so an in-process head runs instead. Head state, consensus delay and the background traffic (patients PT-xxxx) are <strong>synthetic</strong>; every snapshot is still signed by all four parties with real Ed25519 keys and re-verified on each read. Your own uploads are real records.'
+        : 'Connected to the Hydra node at ' + escapeHtml(h.headId) + '.') + '</span>';
+
+    $('#hydraStats').innerHTML =
+      statCard('Head', String(h.status || '—').toUpperCase(), shortId(h.headId)) +
+      statCard('Epoch', h.epoch, (h.totals && h.totals.snapshots) + ' snapshots total') +
+      statCard('Avg confirm', h.stats && h.stats.avgConfirmMs != null ? h.stats.avgConfirmMs + ' ms' : '—', 'multi-party consensus') +
+      statCard('Tx / minute', h.stats && h.stats.txLastMinute != null ? h.stats.txLastMinute : '—', (h.totals && h.totals.realRecords) + ' real · ' + (h.totals && h.totals.syntheticRecords) + ' synthetic records');
+
+    var parties = $('#partyList');
+    if (parties) {
+      parties.innerHTML = (h.parties || []).map(function (p) {
+        return '<div class="party-row"><span class="actor-row__glyph ' + roleAccent(p.id) + '" data-icon="' + roleIcon(p.id) + '"></span>' +
+          '<div class="party-row__body"><div class="party-row__name">' + escapeHtml(p.name) + '</div>' +
+          '<div class="party-row__key">' + escapeHtml(p.publicKey ? p.publicKey.slice(0, 20) + '…' : '') + '</div></div>' +
+          '<span class="sig-ok' + (h.latestVerified ? '' : ' sig-ok--bad') + '">' + (h.latestVerified ? '✓ signed' : '× invalid') + '</span></div>';
+      }).join('') || '<p class="empty-note">Party list not exposed by this node.</p>';
+      injectIcons(parties);
+    }
+
+    var firstLoad = !Object.keys(state.hydraSeen).length;
+    feed.innerHTML = (h.snapshots || []).map(function (s) {
+      var isNew = !firstLoad && !state.hydraSeen[s.snapshotId];
+      state.hydraSeen[s.snapshotId] = true;
+      var title = s.synthetic ? escapeHtml(s.label || 'synthetic record') : recordTitle(s.recordId);
+      return '<div class="snap-row' + (s.synthetic ? '' : ' snap-row--real') + (isNew ? ' is-new' : '') + '">' +
+        '<span class="snap-row__epoch">#' + s.epoch + '</span>' +
+        '<div class="snap-row__body">' +
+          '<div class="snap-row__title"><span class="type-tag type-tag--' + escapeHtml(UPDATE_TYPE_LABEL[s.updateType] || 'share') + '">' + escapeHtml(UPDATE_TYPE_LABEL[s.updateType] || s.updateType || '?') + '</span>' + title +
+            (s.synthetic ? '<span class="syn-tag">synthetic</span>' : '<span class="real-tag">real</span>') + '</div>' +
+          '<div class="snap-row__meta">' + (s.permittedActors || []).map(function (a) {
+              return '<span class="mini-pill mini-pill--xs ' + roleAccent(a) + '" title="' + (ACTOR_META[a] ? ACTOR_META[a].name : a) + '">' + (ACTOR_META[a] ? ACTOR_META[a].name[0] : '?') + '</span>';
+            }).join('') +
+            '<span>' + (s.confirmMs != null ? s.confirmMs + ' ms' : '') + '</span>' +
+            (s.signatures ? '<span>' + s.signatures + '/4 sigs</span>' : '') +
+            '<span>' + escapeHtml(timeAgo(s.acceptedAt)) + '</span></div>' +
+        '</div></div>';
+    }).join('') || '<p class="empty-note">No snapshots yet.</p>';
+  }
+
+  function recordTitle(recordId) {
+    var r = state.records.filter(function (x) { return x.recordId === recordId; })[0];
+    var name = r && r.metadata && r.metadata.originalName;
+    return escapeHtml(name || ('record ' + shortId(recordId)));
+  }
+
+  async function runBenchmark() {
+    var btn = $('#benchBtn');
+    if (btn) { btn.disabled = true; btn.textContent = 'running…'; }
+    try {
+      state.benchmark = await api('/api/hydra/benchmark', { method: 'POST' });
+    } catch (e) {
+      toast('Benchmark failed: ' + e.message, true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'run again'; }
+    renderBenchmark();
+  }
+
+  function renderBenchmark() {
+    var mount = $('#benchMount');
+    if (!mount) return;
+    var b = state.benchmark;
+    var rows = [];
+    if (b) {
+      var m = b.measured || {};
+      if (m.hydraSnapshotInMemory) rows.push({ label: 'Hydra L2 · in-memory snapshot', ms: m.hydraSnapshotInMemory.avgMs, kind: 'hydra', measured: true });
+      if (m.hydraSnapshotMongo) rows.push({ label: 'Hydra L2 · stored snapshot (MongoDB)', ms: m.hydraSnapshotMongo.avgMs, kind: 'hydra', measured: true });
+      rows.push({ label: 'Midnight ZK proof', ms: b.reference.midnightZk.typicalMs, kind: 'midnight' });
+      rows.push({ label: 'Blockfrost L1 query', ms: b.reference.blockfrostL1.typicalMs, kind: 'blockfrost' });
+      rows.push({ label: 'Aiken L1 (block time)', ms: b.reference.aikenL1.typicalMs, kind: 'aiken' });
+    }
+    if (!rows.length) {
+      mount.innerHTML = '<p class="empty-note">Times real permission lookups on this server and compares them with typical L1 round trips.</p>';
+      return;
+    }
+    // Log scale so sub-millisecond and 2-second bars are both visible.
+    var maxLog = Math.log10(3000), minLog = Math.log10(0.0001);
+    mount.innerHTML = rows.map(function (r) {
+      var pct = Math.max(3, ((Math.log10(Math.max(r.ms, 0.0001)) - minLog) / (maxLog - minLog)) * 100);
+      return '<div class="bench-row"><div class="bench-row__label">' + escapeHtml(r.label) +
+        '<span class="bench-row__tag">' + (r.measured ? 'measured' : 'reference') + '</span></div>' +
+        '<div class="bench-row__track"><span class="bench-row__bar" style="width:' + pct.toFixed(1) + '%;background:var(--color-' + r.kind + ')"></span></div>' +
+        '<div class="bench-row__ms">' + formatMs(r.ms) + '</div></div>';
+    }).join('') + '<p class="bench-note">Log scale. Measured rows are timed on this server right now; reference rows are typical published values.</p>';
+  }
+
+  function formatMs(ms) {
+    if (ms < 0.01) return (ms * 1000).toFixed(2) + ' µs';
+    if (ms < 10) return ms.toFixed(2) + ' ms';
+    return Math.round(ms) + ' ms';
+  }
+
+  // ---------------------------------------------------------------
+  // Top bar — live mode of every layer, straight from /api/config
+  // ---------------------------------------------------------------
+  function renderLayerStrip(cfg) {
+    var strip = $('#layerStrip');
+    if (!strip || !cfg || !cfg.layers) return;
+    var order = [['hydra', 'Hydra'], ['aiken', 'Aiken'], ['midnight', 'Midnight'], ['blockfrost', 'Blockfrost'], ['ipfs', 'IPFS']];
+    strip.innerHTML = order.map(function (pair) {
+      var mode = (cfg.layers[pair[0]] || {}).mode || 'off';
+      var cls = mode === 'live' ? 'live' : (mode === 'mock' || mode === 'simulated') ? 'mock' : 'off';
+      return '<span class="layer-chip layer-chip--' + cls + '" title="' + escapeHtml(pair[1] + ': ' + mode) + '"><span class="layer-chip__dot" style="background:var(--color-' + (pair[0] === 'ipfs' ? 'brand' : pair[0]) + ')"></span>' + escapeHtml(pair[1]) + '<em>' + escapeHtml(mode) + '</em></span>';
+    }).join('');
+  }
+
+  // ---------------------------------------------------------------
   // Shared partial templates
   // ---------------------------------------------------------------
   function pipelinePanelHtml(title, hint) {
@@ -1114,6 +1367,35 @@
     api('/api/config').then(function (cfg) {
       SERVER_DEMO_MODE = !!cfg.demoMode;
       if (cfg.network) CARDANO_NETWORK_LABEL = cfg.network;
+      state.config = cfg;
+      renderLayerStrip(cfg);
+      renderOverviewIfMounted();
     }).catch(function () { /* keep defaults */ });
+    loadHydra();
+
+    $('#runDemoBtn').addEventListener('click', function () { if (window.VaultTour) window.VaultTour.start(); });
   });
+
+  // Hooks for the guided demo (public/demo-tour.js). It drives the same
+  // functions the buttons call, so everything it shows is the real backend.
+  window.VaultDash = {
+    state: state,
+    goToSection: goToSection,
+    setActor: function (actorId) {
+      state.actorId = actorId;
+      $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === actorId); });
+    },
+    connectDemoWallet: function (actorId) { return connectDemoWallet(actorId); },
+    isDemoMode: function () { return SERVER_DEMO_MODE; },
+    runUpload: runUpload,
+    runAccessRequest: runAccessRequest,
+    runUnlock: runUnlock,
+    runRevoke: runRevoke,
+    runBenchmark: runBenchmark,
+    waitForStream: waitForStream,
+    loadRecords: loadRecords,
+    loadAudit: loadAudit,
+    loadHydra: loadHydra,
+    toast: toast,
+  };
 })();

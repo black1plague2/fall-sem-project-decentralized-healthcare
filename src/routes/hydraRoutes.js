@@ -23,8 +23,9 @@ router.get('/health', async (req, res) => {
       hydra: health,
       integration: {
         enabled: true,
-        mockMode: process.env.HYDRA_RPC_BASE?.includes('localhost') || process.env.HYDRA_RPC_BASE?.includes('127.0.0.1'),
-        baseUrl: process.env.HYDRA_RPC_BASE || 'http://localhost:4001'
+        mode: hydraClient.mode,
+        fallbackReason: hydraClient.fallbackReason,
+        baseUrl: hydraClient.baseUrl
       }
     });
     
@@ -35,6 +36,83 @@ router.get('/health', async (req, res) => {
       message: error.message,
       details: 'Check if mock-hydra server is running or HYDRA_RPC_BASE is configured correctly'
     });
+  }
+});
+
+/**
+ * GET /api/hydra/status
+ * Live view of the default head for the dashboard: parties, epoch, recent
+ * snapshots (real + synthetic traffic), signature check and timings.
+ */
+router.get('/status', async (req, res) => {
+  try {
+    const { getOrCreateDefaultHead } = require('../services/hydraClient');
+    const hydraClient = getHydraClient();
+    const headId = await getOrCreateDefaultHead();
+    const mode = await hydraClient.resolveMode();
+
+    if (mode === 'simulated') {
+      const sim = require('../services/hydraSimulator');
+      return res.json({ mode, fallbackReason: hydraClient.fallbackReason, ...sim.getHeadStatus(headId) });
+    }
+
+    // Real node: report what its API exposes.
+    const latest = await hydraClient.getLatestSnapshot(headId);
+    const history = await hydraClient.getSnapshots(headId);
+    res.json({
+      mode,
+      headId,
+      status: latest.status,
+      epoch: (latest.snapshot && latest.snapshot.epoch) || 0,
+      parties: [],
+      totals: { snapshots: history.count, records: Object.keys((latest.snapshot && latest.snapshot.records) || {}).length },
+      stats: {},
+      snapshots: (history.snapshots || []).slice(-12).reverse().map((s) => ({
+        epoch: s.epoch, snapshotId: s.snapshotId, updateType: s.updateType, acceptedAt: s.acceptedAt,
+      })),
+    });
+  } catch (error) {
+    logger.error('[Hydra] Status failed', { error: error.message });
+    res.status(503).json({ error: 'Hydra status unavailable', message: error.message });
+  }
+});
+
+/**
+ * POST /api/hydra/benchmark
+ * Times real permission lookups: in-memory against the L2 snapshot, and the
+ * MongoDB-backed snapshot query the permission service actually uses.
+ * L1 numbers are published typical ranges, labelled as such.
+ */
+router.post('/benchmark', async (req, res) => {
+  try {
+    const sim = require('../services/hydraSimulator');
+    const memory = sim.benchmarkLookups(sim.DEFAULT_HEAD_ID, 2000);
+
+    let db = null;
+    const sample = await HydraSnapshot.findOne({ status: 'accepted' }).sort({ createdAt: -1 }).lean();
+    if (sample && sample.records && sample.records[0]) {
+      const recordId = sample.records[0].recordId;
+      const times = [];
+      for (let i = 0; i < 20; i += 1) {
+        const t0 = process.hrtime.bigint();
+        await HydraSnapshot.checkPermission(recordId, '02');
+        times.push(Number(process.hrtime.bigint() - t0) / 1e6);
+      }
+      times.sort((a, b) => a - b);
+      db = { iterations: times.length, avgMs: times.reduce((a, b) => a + b, 0) / times.length, p95Ms: times[Math.floor(times.length * 0.95)] };
+    }
+
+    res.json({
+      measured: { hydraSnapshotInMemory: memory, hydraSnapshotMongo: db },
+      reference: {
+        aikenL1: { typicalMs: 2000, note: 'Cardano block time, reference value' },
+        midnightZk: { typicalMs: 1000, note: 'Proof generation, reference range 800-1200ms' },
+        blockfrostL1: { typicalMs: 1200, note: 'Public API round trip, reference range 500-2000ms' },
+      },
+    });
+  } catch (error) {
+    logger.error('[Hydra] Benchmark failed', { error: error.message });
+    res.status(500).json({ error: 'Benchmark failed', message: error.message });
   }
 });
 

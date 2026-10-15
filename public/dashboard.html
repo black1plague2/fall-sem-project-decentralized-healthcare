@@ -35,6 +35,9 @@
       <button class="dash-nav__item" data-section="access">
         <span class="dash-nav__icon" data-icon="shieldCheck"></span> Access &amp; Permissions
       </button>
+      <button class="dash-nav__item" data-section="hydra">
+        <span class="dash-nav__icon" data-icon="zap"></span> Hydra L2 <span class="dash-nav__live" id="hydraNavLive"></span>
+      </button>
       <button class="dash-nav__item" data-section="audit">
         <span class="dash-nav__icon" data-icon="clipboardList"></span> Audit Log
       </button>
@@ -63,6 +66,10 @@
       <div>
         <h1 class="dash-topbar__title" id="topbarTitle">Overview</h1>
       </div>
+      <div class="dash-topbar__right">
+        <div class="layer-strip" id="layerStrip" aria-label="Verification layer status"></div>
+        <button class="btn btn--demo" id="runDemoBtn" type="button"><span data-icon="play" class="btn__icon"></span> Run demo</button>
+      </div>
     </header>
 
     <main class="dash-content" id="dashContent"></main>
@@ -71,5 +78,6 @@
 
 <script src="/icons.js" defer></script>
 <script src="/dashboard.js" defer></script>
+<script src="/demo-tour.js" defer></script>
 </body>
 </html>

@@ -172,7 +172,7 @@ async function uploadHandler(req, res, next) {
 
       // 🚀 AUTO-SHARE VIA HYDRA: Automatically propose sharing to Hydra Layer-2
       // This makes permission checks 100-400x faster (5-15ms vs 500-2000ms)
-      const AUTO_SHARE_HYDRA = process.env.AUTO_SHARE_HYDRA === 'true';
+      const AUTO_SHARE_HYDRA = process.env.AUTO_SHARE_HYDRA !== 'false';
 
       if (AUTO_SHARE_HYDRA) {
         try {
@@ -247,7 +247,7 @@ async function uploadHandler(req, res, next) {
             snapshotId: hydraResponse.snapshotId,
             actors: actorIds
           });
-          emit('hydra-share', 'done', { headId: hydraHeadId, snapshotId: hydraResponse.snapshotId, epoch: hydraResponse.epoch });
+          emit('hydra-share', 'done', { detail: `Snapshot epoch ${hydraResponse.epoch} accepted by the head`, headId: hydraHeadId, snapshotId: hydraResponse.snapshotId, epoch: hydraResponse.epoch });
         } catch (hydraError) {
           // Non-blocking: Log error but don't fail upload
           auditLogger.logger.warn('⚠️ Hydra auto-share failed (non-blocking)', {
@@ -506,18 +506,9 @@ async function accessRequestHandler(req, res, next) {
     if (!record || !record.cid) {
       return res.status(404).json({ error: 'Record not found or not pinned yet' });
     }
-    const wrappedKeyBase64 = record.wrappedKeys.get(actorId);
-    if (!wrappedKeyBase64) {
-      auditLogger.logAccessDenied({
-        recordId,
-        actorId,
-        actorAddr: address,
-        reason: 'No wrapped key found for actor',
-        requestId
-      });
-      return res.status(404).json({ error: 'Actor does not have a wrapped CEK' });
-    }
-    
+    // The cascade runs first so the live view shows which layer refused an
+    // actor that was never granted (or was revoked). Release still needs
+    // BOTH a cascade grant and a current wrapped key, checked right after.
     const permissionResult = await permissionService.verifyPermission(recordId, actorId, {
       requestId,
       record,
@@ -533,10 +524,25 @@ async function accessRequestHandler(req, res, next) {
       });
       emit('complete', 'denied', { source: permissionResult.source, reason: permissionResult.reason });
       if (sessionId) progressService.closeSession(sessionId);
+      const LAYER_NAMES = { hydra: 'the Hydra L2 snapshot', aiken: 'the Aiken validator', 'midnight-zk': 'the Midnight ZK proof', blockfrost: 'Blockfrost L1', 'local-db-demo': 'the local access list' };
       return res.status(403).json({
-        error: 'Permission denied by on-chain policy or Midnight proof',
+        error: `Refused by ${LAYER_NAMES[permissionResult.source] || 'the permission cascade'}: this actor is not on the record's access list`,
         verificationMethod: permissionResult.source,
       });
+    }
+
+    const wrappedKeyBase64 = record.wrappedKeys.get(actorId);
+    if (!wrappedKeyBase64) {
+      auditLogger.logAccessDenied({
+        recordId,
+        actorId,
+        actorAddr: address,
+        reason: 'No wrapped key found for actor',
+        requestId
+      });
+      emit('complete', 'denied', { source: 'wrapped-key-check', reason: 'no current wrapped key' });
+      if (sessionId) progressService.closeSession(sessionId);
+      return res.status(403).json({ error: 'Actor does not hold a current wrapped key for this record' });
     }
 
     // Log successful access grant
@@ -789,6 +795,25 @@ async function revokeHandler(req, res, next) {
       // Revocation still succeeds even if rotation fails (security: actor removed from DB)
     }
     
+    // Publish the shrunken access list to Hydra L2 so the fast path agrees
+    // with the record. Non-blocking: the revoked actor's wrapped key is
+    // already gone, so access fails closed even if this step fails.
+    try {
+      emit('hydra-sync', 'running', { detail: 'Publishing revocation to Hydra L2 head' });
+      const { publishRecordToHydra } = require('../services/hydraClient');
+      const hydra = await publishRecordToHydra({
+        type: 'REVOKE_ACTOR',
+        recordId,
+        cidHash: record.cid,
+        actorIds: Array.from(record.wrappedKeys.keys()),
+        author: address,
+      });
+      emit('hydra-sync', 'done', { detail: `Snapshot epoch ${hydra.epoch} signed by all parties`, snapshotId: hydra.snapshotId, epoch: hydra.epoch });
+    } catch (hydraErr) {
+      auditLogger.logger.warn('Hydra revoke sync failed (non-blocking)', { recordId, error: hydraErr.message });
+      emit('hydra-sync', 'error', { error: hydraErr.message });
+    }
+
     // Log revocation
     auditLogger.logRevocation({
       recordId,

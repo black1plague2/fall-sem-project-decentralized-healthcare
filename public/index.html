@@ -33,9 +33,11 @@
   <h1 class="hero-title">A medical record<br/>only <em style="font-style:italic">you</em> unlock.</h1>
   <p class="hero-sub">Files are encrypted on the server with AES-256-GCM and pinned to IPFS. The decryption key is never handed out on a database flag — every request is re-verified across four independent, increasingly-authoritative layers: Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1.</p>
   <div class="hero-cta">
-    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
-    <a class="btn btn--ghost-outline on-dark-bg" href="#how-it-works">See how it works</a>
+    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the full demo</a>
+    <a class="btn btn--ghost-outline on-dark-bg" href="/dashboard">Open dashboard</a>
+    <a class="btn btn--ghost-outline on-dark-bg" href="#how-it-works">How it works</a>
   </div>
+  <p class="hero-demo-note">About 2 minutes. Upload, share, verify, decrypt, revoke, all running live and narrated.</p>
 
   <div class="hero-graphic" aria-hidden="true">
     <svg class="hero-graphic__line" viewBox="0 0 520 220" fill="none">
@@ -151,11 +153,14 @@
 <div class="cta-band">
   <h2>See the whole pipeline live</h2>
   <p>Upload a record, request access as another actor, and revoke it — every step streams from the real backend in real time.</p>
-  <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+  <div class="hero-cta" style="justify-content:center">
+    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the full demo</a>
+    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+  </div>
 </div>
 
 <footer class="site-footer">
-  <p><strong>What's real vs. placeholder:</strong> AES-256-GCM encryption, RSA-OAEP key wrapping and the Hydra L2 head are genuinely executing on this server. Aiken, Midnight and Blockfrost run against the mocked/local scaffolding described in <code>.env.example</code> until real credentials are supplied.</p>
+  <p><strong>What's real vs. placeholder:</strong> AES-256-GCM encryption, RSA-OAEP / X25519 key wrapping, IPFS storage and the audit log run for real. When no hydra-node is reachable (as on this hosted demo), the Hydra L2 head runs as an in-process simulation with synthetic background traffic; its snapshots are still signed with real Ed25519 keys. Aiken, Midnight and Blockfrost use the local scaffolding described in <code>.env.example</code> until real credentials are supplied. The status badges above always show the current mode.</p>
 </footer>
 
 <script src="/icons.js" defer></script>

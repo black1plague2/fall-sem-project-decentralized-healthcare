@@ -91,6 +91,24 @@
   animation: rise 0.8s cubic-bezier(.16,1,.3,1) 0.15s both;
 }
 .hero-cta .btn { padding: 16px 30px; }
+.btn--demo-hero {
+  background: var(--color-hydra);
+  color: #000;
+  animation: heroGlow 2.6s ease-in-out infinite;
+}
+@keyframes heroGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(214,164,0,0); }
+  50% { box-shadow: 0 0 0 8px rgba(214,164,0,0.25); }
+}
+.hero-demo-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--on-dark-faint);
+  animation: rise 0.8s cubic-bezier(.16,1,.3,1) 0.2s both;
+}
+.cta-band .hero-cta { animation: none; }
+.cta-band .hero-cta .btn { margin-top: 0; }
+@media (prefers-reduced-motion: reduce) { .btn--demo-hero { animation: none; } }
 
 /* ---------------------------------------------------------------
    Hero graphic — bold icon composition (no stock photography)

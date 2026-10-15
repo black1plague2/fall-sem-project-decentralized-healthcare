@@ -109,7 +109,9 @@ app.get('/health', async (req, res) => {
 
 // Transparency endpoint: tells the frontend which layers are real vs mocked
 // so the demo UI can honestly label LIVE vs MOCK badges per layer.
-app.get('/api/config', (req, res) => {
+app.get('/api/config', async (req, res) => {
+  const hydraClient = require('./services/hydraClient').getHydraClient();
+  const hydraMode = await hydraClient.resolveMode().catch(() => 'remote');
   const { getAikenStats } = require('./services/aikenService');
   const { getMidnightStats } = require('./services/midnightService');
   res.json({
@@ -122,8 +124,10 @@ app.get('/api/config', (req, res) => {
         provider: process.env.IPFS_PROVIDER || 'local',
       },
       hydra: {
-        mode: (process.env.HYDRA_RPC_BASE || 'http://localhost:4001').includes('localhost') ? 'mock' : 'live',
-        baseUrl: process.env.HYDRA_RPC_BASE || 'http://localhost:4001',
+        // 'simulated' = in-process head with synthetic traffic (no node reachable)
+        mode: hydraMode === 'simulated' ? 'simulated' : (hydraClient.baseUrl.includes('localhost') ? 'mock' : 'live'),
+        baseUrl: hydraClient.baseUrl,
+        fallbackReason: hydraClient.fallbackReason,
       },
       aiken: (() => {
         const s = getAikenStats();

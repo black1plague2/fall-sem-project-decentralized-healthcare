@@ -5,6 +5,11 @@
 const axios = require('axios');
 const { logger } = require('./auditLogger');
 
+const UNREACHABLE_CODES = new Set(['ECONNREFUSED', 'ENOTFOUND', 'EAI_AGAIN', 'ECONNABORTED', 'ETIMEDOUT', 'ECONNRESET', 'EHOSTUNREACH']);
+function isUnreachable(error) {
+  return !error.response && (UNREACHABLE_CODES.has(error.code) || /timeout|ECONNREFUSED/i.test(error.message || ''));
+}
+
 class HydraClient {
   /**
    * @param {Object} config
@@ -16,6 +21,13 @@ class HydraClient {
     this.baseUrl = config.hydraBaseUrl || process.env.HYDRA_RPC_BASE || 'http://localhost:4001';
     this.apiKey = config.apiKey || process.env.HYDRA_RPC_KEY || '';
     this.timeout = config.timeout || 30000;
+
+    // 'simulated' forces the in-process simulator, 'remote' forces the RPC
+    // node, 'auto' (default) uses the node and falls back to the simulator
+    // the first time the node turns out to be unreachable.
+    this.preference = (config.mode || process.env.HYDRA_MODE || 'auto').toLowerCase();
+    this.mode = this.preference === 'simulated' ? 'simulated' : 'remote';
+    this.fallbackReason = this.mode === 'simulated' ? 'HYDRA_MODE=simulated' : null;
     
     // Create axios instance
     this.client = axios.create({
@@ -70,13 +82,46 @@ class HydraClient {
   }
 
   /**
+   * Runs `remoteFn` against the RPC node, or `simFn` against the in-process
+   * simulator. In 'auto' mode, a network-level failure (nothing listening,
+   * DNS, timeout) switches this client to the simulator for good.
+   */
+  async _run(remoteFn, simFn) {
+    if (this.mode === 'simulated') return simFn(require('./hydraSimulator'));
+    try {
+      return await remoteFn();
+    } catch (error) {
+      if (this.preference !== 'auto' || !isUnreachable(error)) throw error;
+      this.mode = 'simulated';
+      this.fallbackReason = `Hydra node at ${this.baseUrl} unreachable (${error.code || error.message})`;
+      logger.warn('[HydraClient] Falling back to in-process simulator', { reason: this.fallbackReason });
+      return simFn(require('./hydraSimulator'));
+    }
+  }
+
+  /**
+   * Works out which mode is in use, probing the node once if needed.
+   * @returns {Promise<'remote'|'simulated'>}
+   */
+  async resolveMode() {
+    if (this.mode === 'simulated' || this._probed) return this.mode;
+    this._probed = true;
+    try {
+      await this._run(() => this.client.get('/health', { timeout: 1500 }), () => null);
+    } catch (e) { /* remote answered with an error: still remote */ }
+    return this.mode;
+  }
+
+  /**
    * Health check - verify Hydra node is reachable
    * @returns {Promise<{ok: boolean, service: string, timestamp: number}>}
    */
   async health() {
     try {
-      const response = await this.client.get('/health');
-      return response.data;
+      return await this._run(
+        async () => (await this.client.get('/health')).data,
+        (sim) => sim.health()
+      );
     } catch (error) {
       throw new Error(`Hydra health check failed: ${error.message}`);
     }
@@ -93,10 +138,10 @@ class HydraClient {
    */
   async createHead({ parties = [], contestationPeriod = 60 }) {
     try {
-      const response = await this.client.post('/heads', {
-        parties,
-        contestationPeriod
-      });
+      const response = await this._run(
+        async () => this.client.post('/heads', { parties, contestationPeriod }),
+        async (sim) => ({ data: await sim.createHead({ parties, contestationPeriod }) })
+      );
       
       logger.info('[HydraClient] Head created', {
         headId: response.data.headId,
@@ -133,7 +178,10 @@ class HydraClient {
         throw new Error('updatePayload must contain type and recordId');
       }
       
-      const response = await this.client.post(`/heads/${headId}/propose`, updatePayload);
+      const response = await this._run(
+        async () => this.client.post(`/heads/${headId}/propose`, updatePayload),
+        async (sim) => ({ data: await sim.proposeUpdate(headId, updatePayload) })
+      );
       
       logger.info('[HydraClient] Update proposed', {
         headId,
@@ -165,7 +213,10 @@ class HydraClient {
         throw new Error('headId is required');
       }
       
-      const response = await this.client.get(`/heads/${headId}/snapshot`);
+      const response = await this._run(
+        async () => this.client.get(`/heads/${headId}/snapshot`),
+        async (sim) => ({ data: await sim.getLatestSnapshot(headId) })
+      );
       
       logger.info('[HydraClient] Snapshot retrieved', {
         headId,
@@ -193,7 +244,10 @@ class HydraClient {
         throw new Error('headId is required');
       }
       
-      const response = await this.client.get(`/heads/${headId}/snapshots`);
+      const response = await this._run(
+        async () => this.client.get(`/heads/${headId}/snapshots`),
+        async (sim) => ({ data: await sim.getSnapshots(headId) })
+      );
       
       logger.info('[HydraClient] Snapshots retrieved', {
         headId,
@@ -225,9 +279,11 @@ class HydraClient {
         throw new Error('headId is required');
       }
       
-      const response = await this.client.post(`/heads/${headId}/close`, {
-        reason: chainConfig.reason || 'Finalization requested'
-      });
+      const reason = chainConfig.reason || 'Finalization requested';
+      const response = await this._run(
+        async () => this.client.post(`/heads/${headId}/close`, { reason }),
+        async (sim) => ({ data: await sim.finalizeToChain(headId, { reason }) })
+      );
       
       logger.info('[HydraClient] Head closed and finalized', {
         headId,
@@ -253,8 +309,10 @@ class HydraClient {
    */
   async listHeads() {
     try {
-      const response = await this.client.get('/heads');
-      return response.data;
+      return await this._run(
+        async () => (await this.client.get('/heads')).data,
+        (sim) => sim.listHeads()
+      );
     } catch (error) {
       // Not all hydra-node implementations support this
       logger.warn('[HydraClient] List heads not supported', { error: error.message });
@@ -300,6 +358,11 @@ async function getOrCreateDefaultHead() {
 
   pendingDefaultHead = (async () => {
     const client = getHydraClient();
+    // A fixed id keeps every serverless instance on the same simulated head.
+    if (await client.resolveMode() === 'simulated') {
+      cachedDefaultHeadId = require('./hydraSimulator').DEFAULT_HEAD_ID;
+      return cachedDefaultHeadId;
+    }
     const result = await client.createHead({
       parties: ['01', '02', '03', '04'],
       contestationPeriod: 60,
@@ -320,8 +383,34 @@ function resetDefaultHead() {
   cachedDefaultHeadId = process.env.DEFAULT_HYDRA_HEAD || null;
 }
 
+/**
+ * Proposes the current access list of one record to the default head and
+ * stores the accepted snapshot in MongoDB (where the permission service
+ * reads it). Used after a revoke so the L2 view drops the removed actor.
+ */
+async function publishRecordToHydra({ type, recordId, cidHash, actorIds, author }) {
+  const HydraSnapshot = require('../models/hydraSnapshotModel');
+  const headId = await getOrCreateDefaultHead();
+  const client = getHydraClient();
+  const wrappedKeys = actorIds.map((actorId) => ({ actorId, wrappedKey: 'held-in-record', ephemeralPublicKey: 'n/a' }));
+  const response = await client.proposeUpdate(headId, { type, recordId, cidHash, wrappedKeys, author, timestamp: Date.now() });
+  if (response.status !== 'accepted') throw new Error(`Hydra did not accept update (${response.status})`);
+
+  await HydraSnapshot.create({
+    headId,
+    snapshotId: response.snapshotId,
+    epoch: response.epoch,
+    snapshot: { epoch: response.epoch, snapshotId: response.snapshotId, updateType: type, recordId },
+    status: 'accepted',
+    records: [{ recordId, cidHash, permittedActors: actorIds, wrappedKeys, author, lastUpdated: new Date() }],
+    acceptedAt: new Date(),
+  });
+  return { headId, snapshotId: response.snapshotId, epoch: response.epoch, mode: client.mode };
+}
+
 module.exports = {
   HydraClient,
+  publishRecordToHydra,
   getHydraClient,
   resetHydraClient,
   getOrCreateDefaultHead,

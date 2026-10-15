@@ -36,7 +36,7 @@
       order.forEach(function (pair) {
         var layer = cfg.layers[pair[0]] || {};
         var mode = layer.mode || 'off';
-        var cls = mode === 'live' ? 'status-pill--live' : mode === 'mock' ? 'status-pill--mock' : 'status-pill--off';
+        var cls = mode === 'live' ? 'status-pill--live' : (mode === 'mock' || mode === 'simulated') ? 'status-pill--mock' : 'status-pill--off';
         row.appendChild(el('span', 'status-pill ' + cls, escapeHtml(pair[1]) + ' — ' + escapeHtml(mode)));
       });
       if (cfg.demoMode) row.appendChild(el('span', 'status-pill status-pill--mock', 'demo mode'));
