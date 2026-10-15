@@ -308,7 +308,7 @@ async function readActorKeyFile(fileName) {
   } catch (fsErr) {
     if (!envKeysCache && process.env.DEMO_ACTOR_KEYS) {
       try {
-        envKeysCache = JSON.parse(Buffer.from(process.env.DEMO_ACTOR_KEYS, 'base64').toString('utf8'));
+        envKeysCache = JSON.parse(Buffer.from(process.env.DEMO_ACTOR_KEYS.trim(), 'base64').toString('utf8'));
       } catch (e) {
         throw new Error(`DEMO_ACTOR_KEYS is not valid base64 JSON: ${e.message}`);
       }
@@ -316,6 +316,30 @@ async function readActorKeyFile(fileName) {
     if (envKeysCache && envKeysCache[fileName]) return envKeysCache[fileName];
     throw new Error(`${fsErr.message} (and not in DEMO_ACTOR_KEYS)`);
   }
+}
+
+/**
+ * Where the demo actor keys are coming from, for the /api/config status
+ * view. Reports only counts and a parse error message, never key material.
+ */
+async function actorKeyStatus() {
+  const fs = require('fs').promises;
+  const path = require('path');
+  let files = 0;
+  try {
+    files = (await fs.readdir(path.join(__dirname, '..', '..', 'scripts', 'keys'))).filter((f) => /^actor-/.test(f)).length;
+  } catch (e) { /* folder not deployed */ }
+
+  const raw = process.env.DEMO_ACTOR_KEYS;
+  const env = { present: Boolean(raw), length: raw ? raw.length : 0, entries: 0, error: null };
+  if (raw) {
+    try {
+      env.entries = Object.keys(JSON.parse(Buffer.from(raw.trim(), 'base64').toString('utf8'))).length;
+    } catch (e) {
+      env.error = e.message;
+    }
+  }
+  return { source: files ? 'files' : env.entries ? 'env' : 'missing', files, env };
 }
 
 /**
@@ -373,6 +397,7 @@ async function loadActorX25519PublicKey(actorId) {
 
 module.exports = {
   readActorKeyFile,
+  actorKeyStatus,
 
   // AES-GCM encryption
   generateCEK,

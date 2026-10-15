@@ -139,6 +139,7 @@ app.get('/api/config', async (req, res) => {
       })(),
       blockfrost: { mode: blockfrostConfigured ? 'live' : 'disabled', network: CARDANO_NETWORK },
       walletSignatures: { mode: DEMO_MODE ? 'demo-bypass' : 'cip-8' },
+      actorKeys: await require('./services/cryptoService').actorKeyStatus(),
     },
   });
 });
