@@ -314,6 +314,12 @@ async function readActorKeyFile(fileName) {
       }
     }
     if (envKeysCache && envKeysCache[fileName]) return envKeysCache[fileName];
+
+    // Last resort in DEMO_MODE: a key set generated once and kept in MongoDB.
+    if (process.env.DEMO_MODE === 'true' && !envKeysCache) {
+      const files = await require('./demoKeyring').getDemoKeyFiles();
+      if (files[fileName]) return files[fileName];
+    }
     throw new Error(`${fsErr.message} (and not in DEMO_ACTOR_KEYS)`);
   }
 }
@@ -339,7 +345,9 @@ async function actorKeyStatus() {
       env.error = e.message;
     }
   }
-  return { source: files ? 'files' : env.entries ? 'env' : 'missing', files, env };
+  const keyring = await require('./demoKeyring').keyringStatus();
+  const source = files ? 'files' : env.entries ? 'env' : keyring.available ? 'database (demo keyring)' : 'missing';
+  return { source, files, env, keyring };
 }
 
 /**
