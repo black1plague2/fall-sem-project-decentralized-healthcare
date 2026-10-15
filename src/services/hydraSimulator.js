@@ -129,7 +129,9 @@ function verifySnapshot(headId, snap) {
 function applyUpdate(head, update, confirmMs) {
   snapshotCounter += 1;
   const epoch = head.snapshot.epoch + 1;
-  const snapshotId = `snapshot-${head.headId}-${snapshotCounter}`;
+  // Random suffix: serverless instances each start their counter at 0, and
+  // snapshot ids must stay unique in MongoDB across all of them.
+  const snapshotId = `snapshot-${head.headId}-${snapshotCounter}-${randHex(4)}`;
   const records = { ...(head.snapshot.records || {}) };
 
   records[update.recordId] = {
@@ -173,13 +175,20 @@ function tickSyntheticTraffic(head) {
   if (head.status !== 'open') return;
   const now = Date.now();
   const elapsed = now - head.lastSyntheticTick;
-  const due = Math.min(6, Math.floor(elapsed / 2500));
+  const due = Math.min(6, Math.floor(elapsed / TICK_MS));
   for (let i = 0; i < due; i += 1) applyUpdate(head, syntheticUpdate(), jitter(3, 11));
   if (due > 0) head.lastSyntheticTick = now;
 }
 
+// Epochs are anchored to the clock (one per synthetic tick since 2026-01-01)
+// so separate serverless instances report roughly the same, always-rising
+// epoch instead of each starting again from 1.
+const EPOCH_ORIGIN = Date.UTC(2026, 0, 1);
+const TICK_MS = 2500;
+
 function seedHead(headId) {
   const head = newHead(headId, PARTIES.map((p) => p.id), 60);
+  head.snapshot.epoch = Math.floor((Date.now() - EPOCH_ORIGIN) / TICK_MS) - 14;
   for (let i = 0; i < 14; i += 1) applyUpdate(head, syntheticUpdate(), jitter(3, 11));
   // Spread the seeded history over the last ~10 minutes so it reads naturally.
   const n = head.snapshots.length;
