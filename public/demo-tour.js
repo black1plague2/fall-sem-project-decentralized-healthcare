@@ -1,5 +1,5 @@
 /* Cardano Healthcare Vault — guided demo
- * One click runs the whole story end to end for a presentation: upload,
+ * One click runs the whole story end to end: upload,
  * Hydra L2 sharing, the permission cascade, decryption, a refused actor,
  * revocation with key rotation, and the audit trail. Every step calls the
  * same dashboard functions the buttons use (window.VaultDash), so what the

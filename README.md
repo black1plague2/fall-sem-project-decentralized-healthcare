@@ -73,9 +73,9 @@ signatures are checked again each time the head is read. Set
 `HYDRA_MODE=simulated` to always use it, or `HYDRA_MODE=remote` to turn the
 fallback off.
 
-### Guided demo (for presentations)
+### Guided tour
 
-Click **Run the full demo** on the landing page, or **Run demo** in the
+Click **Take the guided tour** on the landing page, or **Run demo** in the
 dashboard. It runs the whole story by itself against the real backend, with a
 caption bar explaining each step:
 

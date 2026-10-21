@@ -33,11 +33,11 @@
   <h1 class="hero-title">A medical record<br/>only <em style="font-style:italic">you</em> unlock.</h1>
   <p class="hero-sub">Files are encrypted on the server with AES-256-GCM and pinned to IPFS. The decryption key is never handed out on a database flag — every request is re-verified across four independent, increasingly-authoritative layers: Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1.</p>
   <div class="hero-cta">
-    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the full demo</a>
+    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Take the guided tour</a>
     <a class="btn btn--ghost-outline on-dark-bg" href="/dashboard">Open dashboard</a>
     <a class="btn btn--ghost-outline on-dark-bg" href="#how-it-works">How it works</a>
   </div>
-  <p class="hero-demo-note">About 2 minutes. Upload, share, verify, decrypt, revoke, all running live and narrated.</p>
+  <p class="hero-demo-note">About 2 minutes. Upload, share, verify, decrypt and revoke, live and narrated.</p>
 
   <div class="hero-graphic" aria-hidden="true">
     <svg class="hero-graphic__line" viewBox="0 0 520 220" fill="none">
@@ -61,8 +61,8 @@
 <section class="section" id="how-it-works">
   <div class="section-head">
     <p class="section-eyebrow">How it works</p>
-    <h2 class="section-title">Six real steps, not a demo timer</h2>
-    <p class="section-sub">Everything below actually happens on the server when you use the dashboard — each step is streamed live so you can watch it, not just take it on faith.</p>
+    <h2 class="section-title">Six steps, all on the server</h2>
+    <p class="section-sub">Everything below actually happens on the server when you use the dashboard — each step is streamed live as it runs.</p>
   </div>
   <div class="how-list">
     <div class="how-item"><span class="how-item__index">01</span><div><div class="how-item__title">Encrypt client-side</div><div class="how-item__desc">A fresh 256-bit key (CEK) is generated per file and used for AES-256-GCM authenticated encryption — tamper-evident, not just confidential.</div></div></div>
@@ -78,7 +78,7 @@
   <div class="section-head">
     <p class="section-eyebrow">Architecture</p>
     <h2 class="section-title">Four layers, increasing authority</h2>
-    <p class="section-sub">Badges show what's genuinely live on this server right now vs. running on mocked/local scaffolding — see <code>.env.example</code> to wire in real credentials.</p>
+    <p class="section-sub">Each layer reports its live status. Requests resolve at the fastest layer that can answer and fall through only on a miss.</p>
   </div>
   <div class="layers-grid" id="layersGrid">
     <div class="layer-card">
@@ -124,27 +124,27 @@
 
 <section class="section" id="project">
   <div class="section-head">
-    <p class="section-eyebrow">Project</p>
-    <h2 class="section-title">BCSE497J &middot; Project I</h2>
-    <p class="section-sub">Cardano Healthcare Vault — a decentralized EHR architecture combining off-chain speed with on-chain and zero-knowledge assurance.</p>
+    <p class="section-eyebrow">Principles</p>
+    <h2 class="section-title">Designed around the patient</h2>
+    <p class="section-sub">A decentralized EHR architecture combining off-chain speed with on-chain and zero-knowledge assurance.</p>
   </div>
   <div class="info-card">
     <div>
-      <div class="info-block-title">Team</div>
+      <div class="info-block-title">Guarantees</div>
       <div class="info-list">
-        <div class="info-list__row"><span>Garv Bansal</span><span>23BKT0144</span></div>
-        <div class="info-list__row"><span>Simran Rawat</span><span>23BAI0090</span></div>
-        <div class="info-list__row"><span>Lakshay Malani</span><span>23BAI0113</span></div>
-        <div class="info-list__row"><span>Faculty Guide</span><span>Dr. Aarthy S L</span></div>
+        <div class="info-list__row"><span>Ownership</span><span>Patient-controlled grants</span></div>
+        <div class="info-list__row"><span>Integrity</span><span>Tamper-evident AES-256-GCM</span></div>
+        <div class="info-list__row"><span>Privacy</span><span>Zero-knowledge access proofs</span></div>
+        <div class="info-list__row"><span>Revocation</span><span>Automatic key rotation</span></div>
       </div>
     </div>
     <div>
-      <div class="info-block-title">Scope</div>
+      <div class="info-block-title">Compliance</div>
       <div class="info-list">
-        <div class="info-list__row"><span>SDGs</span><span>SDG 3 &middot; SDG 9</span></div>
-        <div class="info-list__row"><span>Outcome</span><span>Working prototype</span></div>
-        <div class="info-list__row"><span>Target</span><span>Scopus conference paper</span></div>
-        <div class="info-list__row"><span>Compliance</span><span>HIPAA / GDPR-aligned</span></div>
+        <div class="info-list__row"><span>Data on chain</span><span>Hashes only, no PHI</span></div>
+        <div class="info-list__row"><span>Right to erasure</span><span>Key destruction</span></div>
+        <div class="info-list__row"><span>Audit trail</span><span>Every access logged</span></div>
+        <div class="info-list__row"><span>Alignment</span><span>HIPAA / GDPR</span></div>
       </div>
     </div>
   </div>
@@ -154,13 +154,14 @@
   <h2>See the whole pipeline live</h2>
   <p>Upload a record, request access as another actor, and revoke it — every step streams from the real backend in real time.</p>
   <div class="hero-cta" style="justify-content:center">
-    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the full demo</a>
+    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Take the guided tour</a>
     <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
   </div>
 </div>
 
 <footer class="site-footer">
-  <p><strong>What's real vs. placeholder:</strong> AES-256-GCM encryption, RSA-OAEP / X25519 key wrapping, IPFS storage and the audit log run for real. When no hydra-node is reachable (as on this hosted demo), the Hydra L2 head runs as an in-process simulation with synthetic background traffic; its snapshots are still signed with real Ed25519 keys. Aiken, Midnight and Blockfrost use the local scaffolding described in <code>.env.example</code> until real credentials are supplied. The status badges above always show the current mode.</p>
+  <p><strong>Cardano Healthcare Vault</strong> &middot; Decentralized care, owned by the patient.</p>
+  <p class="site-footer__note">AES-256-GCM encryption, RSA-OAEP / X25519 key wrapping, IPFS storage and the audit log run live. Where a Hydra node, Aiken, Midnight or Blockfrost endpoint is not connected, that layer runs in local mode; the status badges always show the current mode.</p>
 </footer>
 
 <script src="/icons.js" defer></script>

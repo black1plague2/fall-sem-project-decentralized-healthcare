@@ -292,7 +292,7 @@
 .role-card__desc { margin-top: 10px; font-size: 13px; color: var(--ink-soft); line-height: 1.55; }
 
 /* ---------------------------------------------------------------
-   Project info (real, from the review deck — not fabricated)
+   Principles
    --------------------------------------------------------------- */
 .info-card {
   background: var(--card);
@@ -353,6 +353,8 @@
   color: var(--on-dark-faint);
   line-height: 1.7;
 }
+.site-footer p + .site-footer__note { margin-top: 10px; }
+.site-footer p strong { color: var(--on-dark-soft); font-weight: 600; }
 .site-footer code {
   background: var(--line-dark-soft);
   color: var(--on-dark-soft);
