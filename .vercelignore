@@ -8,3 +8,4 @@ mock-hydra
 contracts
 coverage
 .nyc_output
+scripts/keys/ACTOR_PASSWORDS.txt

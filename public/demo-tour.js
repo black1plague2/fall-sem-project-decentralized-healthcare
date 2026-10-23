@@ -374,6 +374,13 @@
     if (tour) return;
     var d = window.VaultDash;
     if (!d) return;
+    // The story acts as all four actors, so all four must be signed in.
+    var missing = ['01', '02', '03', '04'].filter(function (a) { return !d.isSignedIn(a); });
+    if (missing.length) {
+      d.toast('Sign in as ' + missing.map(function (a) { return ACTOR_NAME[a]; }).join(', ') + ' to run the full demo.', true);
+      setTimeout(function () { location.assign(d.loginUrlFor(missing[0])); }, 1600);
+      return;
+    }
     var old = document.querySelector('.tour-finale'); if (old) old.remove();
 
     tour = { paused: false, skip: false, results: { startedAt: Date.now() - 2000 }, bar: null };

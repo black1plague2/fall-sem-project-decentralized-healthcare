@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const appController = require('../controllers/appController');
+const { getSession } = require('../services/authService');
 
 const router = express.Router();
 
@@ -16,7 +17,10 @@ router.get('/demo', (req, res) => {
 });
 
 // Main dashboard (sidebar-navigated app shell — upload, records, access, audit log, actors)
+// Signed-out visitors are sent to the login screen first.
 router.get('/dashboard', (req, res) => {
+  if (!getSession(req)) return res.redirect('/login?next=/dashboard');
+  res.set('Cache-Control', 'no-store');
   res.sendFile(path.join(__dirname, '../../public/dashboard.html'));
 });
 

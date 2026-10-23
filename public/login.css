@@ -1,0 +1,107 @@
+/* Sign-in screen — same black base / white elevated card language as the dashboard */
+.login {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+  gap: 56px;
+  align-items: center;
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 32px;
+}
+.login__brand {
+  display: inline-flex; align-items: center; gap: 10px;
+  color: var(--on-dark); text-decoration: none; font-weight: 600; margin-bottom: 40px;
+}
+.login__intro h1 { font-size: clamp(36px, 5vw, 56px); line-height: 1.05; margin-bottom: 18px; }
+.login__lede { color: var(--on-dark-soft); max-width: 46ch; font-size: 17px; }
+.login__facts { list-style: none; padding: 0; margin: 32px 0 0; display: grid; gap: 12px; }
+.login__facts li { display: flex; align-items: center; gap: 10px; color: var(--on-dark-soft); font-size: 15px; }
+.login__facts li span { display: inline-flex; color: var(--on-dark); }
+
+.login__card {
+  background: var(--card); color: var(--ink);
+  border-radius: var(--radius-card); padding: 32px;
+  box-shadow: var(--shadow-lift);
+}
+.login__card h2 { font-size: 24px; margin-bottom: 18px; }
+
+.role-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 24px; }
+.role {
+  position: relative;
+  display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px;
+  align-items: center; text-align: left;
+  padding: 12px 14px; border-radius: 14px;
+  border: 1.5px solid var(--line); background: var(--surface);
+  font: inherit; color: var(--ink); cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.role:hover { border-color: var(--ink-soft); }
+.role:focus-visible, .login__form input:focus-visible, .pw__toggle:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 2px; }
+.role__glyph {
+  grid-row: 1 / span 2; width: 34px; height: 34px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center; color: #fff;
+}
+.role__name { font-weight: 600; font-size: 15px; }
+.role__hint { font-size: 12px; color: var(--ink-faint); }
+.role__done { position: absolute; top: 8px; right: 8px; color: var(--good); display: none; }
+.role.is-signed .role__done { display: inline-flex; }
+.role[aria-checked="true"][data-actor="01"] { border-color: var(--color-patient);   background: rgba(47,111,237,.08); }
+.role[aria-checked="true"][data-actor="02"] { border-color: var(--color-doctor);    background: rgba(18,153,111,.08); }
+.role[aria-checked="true"][data-actor="03"] { border-color: var(--color-hospital);  background: rgba(139,63,240,.08); }
+.role[aria-checked="true"][data-actor="04"] { border-color: var(--color-insurance); background: rgba(224,135,30,.08); }
+.role[aria-checked="true"] { border-width: 2px; }
+
+.login__form { display: grid; gap: 6px; }
+.login__form label { font-size: 13px; font-weight: 600; color: var(--ink-soft); margin-top: 8px; }
+.login__form input {
+  width: 100%; font: inherit; font-size: 16px; color: var(--ink);
+  padding: 13px 14px; border-radius: 12px; border: 1.5px solid var(--line); background: var(--surface);
+}
+.pw { position: relative; }
+.pw input { padding-right: 72px; }
+.pw__toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  border: none; background: none; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--ink-soft); cursor: pointer; padding: 6px 8px; border-radius: 8px;
+}
+.login__error { color: var(--accent); font-size: 14px; margin: 6px 0 2px; }
+.login__form .btn { margin-top: 16px; }
+
+.login__signed { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line-soft); font-size: 14px; color: var(--ink-soft); }
+.login__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.login__actions .btn { padding: 12px 18px; font-size: 14px; text-decoration: none; }
+
+@media (max-width: 860px) {
+  .login { grid-template-columns: 1fr; gap: 28px; padding: 32px 16px; }
+  .login__brand { margin-bottom: 20px; }
+  .login__facts { display: none; }
+}
+
+/* quick demo access */
+.demo-access { margin-top: 22px; padding-top: 20px; border-top: 1px solid var(--line-soft); }
+.demo-access__head { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+.demo-access__head span { display: inline-flex; color: var(--color-brand); }
+.demo-access__note { font-size: 13px; color: var(--ink-faint); margin: 4px 0 12px; }
+.demo-access__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
+.demo-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 11px 12px; border-radius: 12px; border: 1.5px solid currentColor;
+  background: var(--surface); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, color .15s ease;
+}
+.demo-btn span { display: inline-flex; }
+.demo-btn--patient   { color: var(--color-patient); }
+.demo-btn--doctor    { color: var(--color-doctor); }
+.demo-btn--hospital  { color: var(--color-hospital); }
+.demo-btn--insurance { color: var(--color-insurance); }
+.demo-btn:hover:not(:disabled) { background: currentColor; }
+.demo-btn:hover:not(:disabled) > * , .demo-btn:hover:not(:disabled) { color: #fff; }
+.demo-btn--patient:hover:not(:disabled)   { background: var(--color-patient); }
+.demo-btn--doctor:hover:not(:disabled)    { background: var(--color-doctor); }
+.demo-btn--hospital:hover:not(:disabled)  { background: var(--color-hospital); }
+.demo-btn--insurance:hover:not(:disabled) { background: var(--color-insurance); }
+.demo-btn:disabled, .demo-btn--all:disabled { opacity: .5; cursor: wait; }
+.demo-btn:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 2px; }

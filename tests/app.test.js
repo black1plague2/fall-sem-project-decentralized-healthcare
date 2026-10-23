@@ -30,6 +30,12 @@ test('landing page and dashboard are served', async () => {
   expect(landing.status).toBe(200);
   expect(landing.text).toContain('Cardano Healthcare Vault');
 
+  // signed out: the dashboard sends you to the login screen
   const dash = await request(app).get('/dashboard');
-  expect(dash.status).toBe(200);
+  expect(dash.status).toBe(302);
+  expect(dash.headers.location).toBe('/login?next=/dashboard');
+
+  const login = await request(app).get('/login');
+  expect(login.status).toBe(200);
+  expect(login.text).toContain('Sign in to the vault');
 });

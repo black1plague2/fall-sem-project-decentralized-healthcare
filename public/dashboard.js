@@ -100,6 +100,7 @@
     // "Connect Wallet" click.
     walletConnected: {},
     wallets: {},
+    sessionActors: [],   // actors signed in on this browser (from the server session)
     uploadFileChosen: false,
     hydraTimer: null,
     hydra: null,
@@ -243,6 +244,9 @@
     var res = await fetch(path, opts);
     var json = null;
     try { json = await res.json(); } catch (e) { /* no body */ }
+    if (res.status === 401) {
+      location.assign('/login?next=/dashboard');
+    }
     if (!res.ok) {
       var msg = (json && (json.error || json.message)) || (res.status + ' ' + res.statusText);
       var err = new Error(msg);
@@ -484,13 +488,40 @@
       btn.addEventListener('click', function () { goToSection(btn.dataset.section); });
     });
     $all('.actor-row').forEach(function (row) {
-      row.addEventListener('click', function () {
-        state.actorId = row.dataset.actor;
-        $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r === row); });
-        // Re-render the current section so role-gated content updates immediately.
-        renderSection(state.section);
-      });
+      row.addEventListener('click', function () { switchActor(row.dataset.actor); });
     });
+    var out = $('#signOutBtn');
+    if (out) out.addEventListener('click', signOut);
+  }
+
+  // ---------------------------------------------------------------
+  // Signed-in actors
+  // ---------------------------------------------------------------
+  var ROLE_SLUG = { '01': 'patient', '02': 'doctor', '03': 'hospital', '04': 'insurance' };
+  function isSignedIn(actorId) { return state.sessionActors.indexOf(actorId) !== -1; }
+  function loginUrlFor(actorId) { return '/login?role=' + ROLE_SLUG[actorId] + '&next=/dashboard'; }
+
+  // Switching to an actor you have not signed in as sends you to the login screen.
+  function switchActor(actorId) {
+    if (!isSignedIn(actorId)) { location.assign(loginUrlFor(actorId)); return false; }
+    state.actorId = actorId;
+    $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === actorId); });
+    // Re-render the current section so role-gated content updates immediately.
+    renderSection(state.section);
+    return true;
+  }
+
+  function renderSessionState() {
+    $all('.actor-row').forEach(function (r) {
+      var signed = isSignedIn(r.dataset.actor);
+      r.classList.toggle('is-locked', !signed);
+      r.title = signed ? 'Signed in' : 'Sign in as ' + ACTOR_META[r.dataset.actor].name;
+    });
+  }
+
+  async function signOut() {
+    try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { /* ignore */ }
+    location.assign('/login');
   }
 
   function goToSection(id) {
@@ -1286,11 +1317,7 @@
   }
   function bindRoleGate(content) {
     $all('[data-switch-actor]', content).forEach(function (b) {
-      b.addEventListener('click', function () {
-        state.actorId = b.dataset.switchActor;
-        $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === state.actorId); });
-        renderSection(state.section);
-      });
+      b.addEventListener('click', function () { switchActor(b.dataset.switchActor); });
     });
   }
 
@@ -1356,10 +1383,19 @@
   // ---------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------
-  document.addEventListener('DOMContentLoaded', function () {
+  document.addEventListener('DOMContentLoaded', async function () {
+    // No session, no dashboard: the server already redirects, this covers expiry.
+    try {
+      var sess = await api('/api/auth/session');
+      state.sessionActors = sess.actors || [];
+    } catch (e) { state.sessionActors = []; }
+    if (!state.sessionActors.length) { location.assign('/login?next=/dashboard'); return; }
+    state.actorId = isSignedIn('01') ? '01' : state.sessionActors[0];
+
     bindSidebar();
     injectIcons(document);
-    $('.actor-row[data-actor="01"]').classList.add('is-active');
+    renderSessionState();
+    $('.actor-row[data-actor="' + state.actorId + '"]').classList.add('is-active');
     $('.dash-nav__item[data-section="overview"]').classList.add('is-active');
     loadRecords();
     loadAudit();
@@ -1381,7 +1417,10 @@
   window.VaultDash = {
     state: state,
     goToSection: goToSection,
+    isSignedIn: isSignedIn,
+    loginUrlFor: loginUrlFor,
     setActor: function (actorId) {
+      if (!isSignedIn(actorId)) throw new Error('Not signed in as ' + ACTOR_META[actorId].name);
       state.actorId = actorId;
       $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === actorId); });
     },

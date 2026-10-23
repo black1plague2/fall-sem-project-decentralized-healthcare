@@ -8,6 +8,8 @@ const demoRoutes = require('./routes/demoRoutes');
 const appRoutes = require('./routes/appRoutes');
 const hydraRoutes = require('./routes/hydraRoutes');
 const logRoutes = require('./routes/logRoutes');
+const authRoutes = require('./routes/authRoutes');
+const { requireSession } = require('./services/authService');
 const { initRedis, healthCheck } = require('./services/cekManager');
 const { standardLimiter } = require('./services/rateLimiter');
 
@@ -172,8 +174,20 @@ app.get('/metrics', (req, res) => {
   res.send(lines.join('\n') + '\n');
 });
 
+// The dashboard is only reachable through the signed-in /dashboard route.
+app.get(['/dashboard.html', '/login.html'], (req, res) => res.redirect(req.path === '/login.html' ? '/login' : '/dashboard'));
+
 // Serve static files from public directory
 app.use(express.static('public'));
+
+// Sign-in routes and the session gate run before the database wait below,
+// so signed-out requests are refused immediately.
+app.use(authRoutes);
+
+// Everything that reads or changes health records needs a signed-in actor.
+// Per-actor checks (only the Patient may upload/revoke, a Doctor may only
+// request as the Doctor, ...) live next to each route in encryptionRoutes.
+app.use(['/api/encrypt', '/api/access', '/api/revoke', '/api/records', '/api/actors', '/api/logs', '/api/hydra'], requireSession);
 
 // Cached connection promise, keyed so a failed attempt doesn't get stuck:
 // on serverless, a fire-and-forget mongoose.connect() on cold start loses

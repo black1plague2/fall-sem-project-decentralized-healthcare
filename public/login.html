@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sign in — Cardano Healthcare Vault</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/base.css" />
+<link rel="stylesheet" href="/login.css" />
+</head>
+<body>
+<div class="blobfield" aria-hidden="true"></div>
+
+<main class="login">
+  <section class="login__intro">
+    <a class="login__brand" href="/">
+      <span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span>
+      <span>Cardano Healthcare Vault</span>
+    </a>
+    <h1>Sign in to the vault</h1>
+    <p class="login__lede">Each actor signs in with their own account. The server checks every request against who is signed in, so a Doctor can never act as the Patient, and nobody reaches a record without a session.</p>
+    <ul class="login__facts">
+      <li><span data-icon="lockKeyhole"></span> Passwords stored only as scrypt hashes</li>
+      <li><span data-icon="shieldCheck"></span> Signed, HttpOnly session cookie, 8 hour expiry</li>
+      <li><span data-icon="clipboardList"></span> Every sign-in and failed attempt is audited</li>
+    </ul>
+  </section>
+
+  <section class="login__card" aria-labelledby="loginTitle">
+    <h2 id="loginTitle">Choose your role</h2>
+    <div class="role-grid" role="radiogroup" aria-label="Role">
+      <button type="button" class="role" role="radio" aria-checked="false" data-role="patient" data-actor="01">
+        <span class="role__glyph icon-badge--patient" data-icon="user"></span><span class="role__name">Patient</span><span class="role__hint">Owner</span><span class="role__done" data-icon="checkCircle2"></span>
+      </button>
+      <button type="button" class="role" role="radio" aria-checked="false" data-role="doctor" data-actor="02">
+        <span class="role__glyph icon-badge--doctor" data-icon="stethoscope"></span><span class="role__name">Doctor</span><span class="role__hint">Requester</span><span class="role__done" data-icon="checkCircle2"></span>
+      </button>
+      <button type="button" class="role" role="radio" aria-checked="false" data-role="hospital" data-actor="03">
+        <span class="role__glyph icon-badge--hospital" data-icon="building2"></span><span class="role__name">Hospital</span><span class="role__hint">Requester</span><span class="role__done" data-icon="checkCircle2"></span>
+      </button>
+      <button type="button" class="role" role="radio" aria-checked="false" data-role="insurance" data-actor="04">
+        <span class="role__glyph icon-badge--insurance" data-icon="umbrella"></span><span class="role__name">Insurance</span><span class="role__hint">Requester</span><span class="role__done" data-icon="checkCircle2"></span>
+      </button>
+    </div>
+
+    <form id="loginForm" class="login__form" autocomplete="on" novalidate>
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" required />
+      <label for="password">Password</label>
+      <div class="pw">
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button type="button" class="pw__toggle" id="pwToggle" aria-label="Show password" aria-pressed="false">Show</button>
+      </div>
+      <p class="login__error" id="loginError" role="alert" hidden></p>
+      <button class="btn btn--block" id="loginBtn" type="submit">Sign in</button>
+    </form>
+
+    <div class="demo-access" id="demoAccess" hidden>
+      <div class="demo-access__head"><span data-icon="sparkles"></span> Quick demo access</div>
+      <p class="demo-access__note">Demo server only. Signs in with the demo accounts, no password needed.</p>
+      <div class="demo-access__grid">
+        <button type="button" class="demo-btn demo-btn--patient" data-demo-role="patient"><span data-icon="user"></span> Patient</button>
+        <button type="button" class="demo-btn demo-btn--doctor" data-demo-role="doctor"><span data-icon="stethoscope"></span> Doctor</button>
+        <button type="button" class="demo-btn demo-btn--hospital" data-demo-role="hospital"><span data-icon="building2"></span> Hospital</button>
+        <button type="button" class="demo-btn demo-btn--insurance" data-demo-role="insurance"><span data-icon="umbrella"></span> Insurance</button>
+      </div>
+      <button type="button" class="btn btn--block demo-btn--all" data-demo-role="all"><span data-icon="users"></span> Sign in as all four roles</button>
+    </div>
+
+    <div class="login__signed" id="signedBlock" hidden>
+      <p>Signed in on this browser: <strong id="signedList"></strong></p>
+      <div class="login__actions">
+        <a class="btn" id="continueBtn" href="/dashboard">Continue to dashboard</a>
+        <button class="btn btn--ghost-outline" id="logoutAll" type="button">Sign out everyone</button>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/icons.js"></script>
+<script src="/login.js"></script>
+</body>
+</html>

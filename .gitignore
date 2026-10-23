@@ -52,3 +52,6 @@ scripts/keys/*.pem
 
 # Packed demo keys for the DEMO_ACTOR_KEYS env var (scripts/exportActorKeys.js)
 scripts/keys/DEMO_ACTOR_KEYS.txt
+
+# Plain sign-in passwords from scripts/setActorPasswords.js
+scripts/keys/ACTOR_PASSWORDS.txt
