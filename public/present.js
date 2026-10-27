@@ -359,7 +359,9 @@
         expect('Doctor decrypts the original report', res && res.ok, res && res.error && res.error.message);
         var pre = frameDoc('doctor').querySelector('#unlockPreview');
         await wait(600);
-        expect('Decrypted text matches what the patient uploaded', pre && pre.textContent.indexOf('Haemoglobin') !== -1);
+        var shown = (res.text != null ? res.text : (pre && pre.textContent)) || '';
+        expect('Decrypted text matches what the patient uploaded', shown.indexOf('Haemoglobin') !== -1,
+          res.text == null ? 'server returned ' + (res.mimeType || 'no type') + ', not text' : 'got ' + res.text.length + ' characters without the expected content');
         return 'Decrypted ' + res.filename + ' in the Doctor portal.';
       },
     },

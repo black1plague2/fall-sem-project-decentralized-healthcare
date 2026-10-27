@@ -108,6 +108,7 @@
     lookupRecords: [],
     lookupPatient: '',
     preselectRecord: '',
+    otherRecords: [],
     records: [],
     auditEvents: [],
     activeES: null,
@@ -482,6 +483,14 @@
     } catch (e) {
       state.records = [];
     }
+    if (!IS_OWNER) {
+      try {
+        var dir = await api('/api/records/directory');
+        state.otherRecords = (dir.records || []).filter(function (r) { return !r.sharedWithYou; });
+      } catch (e) {
+        state.otherRecords = [];
+      }
+    }
     renderRecordsListIfMounted();
     renderSharedListIfMounted();
     renderAccessDropdownIfMounted();
@@ -799,6 +808,11 @@
         '<div class="panel-head"><div class="panel-head__title"><span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="files"></span><h2>Records shared with me</h2></div><button class="ghost-btn" id="refreshSharedBtn" type="button">refresh</button></div>' +
         '<p class="section-note">Only records a patient has shared with the ' + escapeHtml(ACTOR_META[PORTAL_ACTOR].name) + ' appear here. Who else can open them stays private.</p>' +
         '<div class="records-list" id="sharedListMount"></div>' +
+      '</div>' +
+      '<div class="panel" style="margin-top:16px">' +
+        '<div class="panel-head"><div class="panel-head__title"><span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="lockKeyhole"></span><h2>Not shared with me</h2></div></div>' +
+        '<p class="section-note">Other records in the vault. You can see that they exist, but no key was wrapped for the ' + escapeHtml(ACTOR_META[PORTAL_ACTOR].name) + ', so any attempt to open one is refused by the access cascade.</p>' +
+        '<div class="records-list" id="otherListMount"></div>' +
       '</div>';
     $('#refreshSharedBtn').addEventListener('click', function () { loadRecords(); toast('Refreshed'); });
     renderSharedListIfMounted();
@@ -818,6 +832,23 @@
     }).join('');
     $all('[data-request]', mount).forEach(function (b) {
       b.addEventListener('click', function () { state.preselectRecord = b.dataset.request; goToSection('access'); });
+    });
+    renderOtherListIfMounted();
+  }
+  function renderOtherListIfMounted() {
+    var mount = $('#otherListMount');
+    if (!mount) return;
+    if (!state.otherRecords.length) { mount.innerHTML = '<p class="empty-note">Every record in the vault is shared with you.</p>'; return; }
+    mount.innerHTML = state.otherRecords.map(function (r) {
+      var name = (r.metadata && r.metadata.originalName) || 'untitled';
+      return '<div class="record-card shared-card shared-card--locked">' +
+        '<div class="record-card__top"><span class="record-card__name">' + escapeHtml(name) + '</span><span class="record-card__status record-card__status--locked">not shared with you</span></div>' +
+        '<div class="record-card__meta">Patient ' + escapeHtml((r.metadata && r.metadata.patientId) || '—') + ' · uploaded ' + timeAgo(r.createdAt) + '</div>' +
+        '<button class="btn btn--ghost-outline shared-card__btn" data-try="' + r.recordId + '" type="button">Try to open</button>' +
+      '</div>';
+    }).join('');
+    $all('[data-try]', mount).forEach(function (b) {
+      b.addEventListener('click', function () { state.preselectRecord = b.dataset.try; goToSection('access'); });
     });
   }
 
@@ -891,9 +922,13 @@
     var sharedIds = {};
     state.records.forEach(function (r) { sharedIds[r.recordId] = true; });
     var extra = state.lookupRecords.filter(function (r) { return !sharedIds[r.recordId]; });
+    var seen = {};
+    extra.forEach(function (r) { seen[r.recordId] = true; });
+    var others = state.otherRecords.filter(function (r) { return !sharedIds[r.recordId] && !seen[r.recordId]; });
     var html = '';
     if (state.records.length) html += '<optgroup label="Shared with me">' + state.records.map(opt).join('') + '</optgroup>';
     if (extra.length) html += '<optgroup label="Found by patient lookup">' + extra.map(opt).join('') + '</optgroup>';
+    if (others.length) html += '<optgroup label="Not shared with me (will be refused)">' + others.map(opt).join('') + '</optgroup>';
     return html;
   }
   function renderAccessDropdownIfMounted() {
@@ -941,11 +976,11 @@
       loadAudit();
       return { ok: true, data: res };
     } catch (err) {
-      toast('Access denied: ' + err.message, true);
+      toast('Access denied for the ' + meta.name + ': ' + err.message, true);
       var denyArea = $('#unlockArea');
       if (denyArea) {
         denyArea.innerHTML = '<div class="deny-card"><span class="icon-badge icon-badge--sm deny-card__icon" data-icon="xCircle"></span>' +
-          '<div><div class="deny-card__title">Access refused</div><div class="deny-card__meta">' + escapeHtml(err.message) + '</div></div></div>';
+          '<div><div class="deny-card__title">Access denied for the ' + escapeHtml(meta.name) + '</div><div class="deny-card__meta">' + escapeHtml(err.message) + '</div></div></div>';
         injectIcons(denyArea);
       }
       loadAudit();
@@ -982,6 +1017,7 @@
       var blob = await res.blob();
       var url = URL.createObjectURL(blob);
       var isText = mimeType.indexOf('text/') === 0 || mimeType === 'application/json';
+      var text = isText ? await blob.text() : null;
 
       if (area) {
         area.innerHTML =
@@ -996,16 +1032,12 @@
             (isText ? '<pre class="unlock-preview" id="unlockPreview"></pre>' : '') +
           '</div>';
         injectIcons(area);
-        if (isText) {
-          blob.text().then(function (text) {
-            var p = $('#unlockPreview');
-            if (p) p.textContent = text.slice(0, 2000) + (text.length > 2000 ? '\n…' : '');
-          });
-        }
+        var p = $('#unlockPreview');
+        if (p) p.textContent = text.slice(0, 2000) + (text.length > 2000 ? '\n…' : '');
       }
       toast('Decrypted for ' + meta.name + ' — ' + filename);
       loadAudit();
-      return { ok: true, filename: filename };
+      return { ok: true, filename: filename, mimeType: mimeType, text: text };
     } catch (err) {
       if (area) area.innerHTML = '<p class="empty-note">Unlock failed: ' + escapeHtml(err.message) + '</p>';
       toast('Unlock failed: ' + err.message, true);

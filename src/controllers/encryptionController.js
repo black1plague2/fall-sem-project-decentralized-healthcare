@@ -1150,6 +1150,26 @@ async function lookupRecordsHandler(req, res, next) {
   }
 }
 
+// Every record in the vault as a requesting actor may see it: name, patient
+// and date only, plus whether it was shared with *this* actor. Who else holds
+// a key stays private. Opening one still goes through the access cascade,
+// which refuses anything not shared with the actor.
+async function directoryHandler(req, res, next) {
+  try {
+    const viewer = req.actingAs || '01';
+    const records = await Record.find({}).sort({ createdAt: -1 }).limit(50).lean();
+    res.json({
+      success: true,
+      records: records.map((r) => ({
+        ...requesterView(r),
+        sharedWithYou: Boolean(r.wrappedKeys && Object.prototype.hasOwnProperty.call(r.wrappedKeys, viewer)),
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function listRecordsHandler(req, res, next) {
   try {
     const { patientId, owner, status, limit = 50, skip = 0 } = req.query;
@@ -1457,6 +1477,7 @@ module.exports = {
   metadataHandler,
   listRecordsHandler,
   lookupRecordsHandler,
+  directoryHandler,
   uploadProgressHandler,
   proposeShareHandler,
 };

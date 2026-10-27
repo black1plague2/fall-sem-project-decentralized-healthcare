@@ -833,3 +833,9 @@ body.portal .dash-nav__item.is-active { box-shadow: inset 3px 0 0 var(--portal);
   .shared-card { grid-template-columns: 1fr; }
   .shared-card__btn { grid-column: 1; grid-row: auto; margin-top: 10px; }
 }
+
+/* Records that exist but were not shared with this actor */
+.shared-card--locked { border-style: dashed; }
+.shared-card--locked .record-card__name { color: var(--ink-soft); }
+.record-card__status--locked { border-color: var(--accent, #e5484d); color: var(--accent, #e5484d); }
+.shared-card--locked .shared-card__btn { border: 1.5px solid var(--line); background: transparent; color: var(--ink); }
