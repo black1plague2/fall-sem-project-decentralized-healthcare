@@ -212,6 +212,7 @@ async function uploadHandler(req, res, next) {
             epoch: hydraResponse.epoch,
             snapshotId: hydraResponse.snapshotId,
             status: hydraResponse.status,
+            updateType: 'SHARE_RECORD',
             acceptedAt: new Date().toISOString(),
             records: {
               [recordId]: {

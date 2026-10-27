@@ -77,18 +77,40 @@ async function uploadViaPinata(buf) {
 // a real IPFS/Pinata connection.
 const mockStore = new Map();
 
+// On serverless each instance has its own memory, so the instance that
+// serves a download may not be the one that took the upload. When MongoDB is
+// connected, mock blobs (ciphertext only) are also kept there.
+function mockCollection() {
+  const mongoose = require('mongoose');
+  return mongoose.connection.readyState === 1 ? mongoose.connection.db.collection('mockipfsblobs') : null;
+}
+
 async function uploadMock(buf) {
   // Deterministic CID mock for offline demos; never use in production.
   const fakeHash = require('./cryptoService').sha256hex(buf).slice(0, 46);
   const cid = `bafy${fakeHash}`;
   mockStore.set(cid, Buffer.from(buf));
+  const col = mockCollection();
+  if (col) {
+    try {
+      await col.updateOne({ _id: cid }, { $set: { data: Buffer.from(buf), createdAt: new Date() } }, { upsert: true });
+    } catch (e) { /* memory copy still serves this instance */ }
+  }
   return cid;
 }
 
-function downloadMock(cid) {
-  const buf = mockStore.get(cid);
+async function downloadMock(cid) {
+  let buf = mockStore.get(cid);
   if (!buf) {
-    throw new Error(`Mock CID not found: ${cid} (was it uploaded in this server process?)`);
+    const col = mockCollection();
+    const doc = col ? await col.findOne({ _id: cid }) : null;
+    if (doc && doc.data) {
+      buf = Buffer.from(doc.data.buffer ? doc.data.buffer : doc.data);
+      mockStore.set(cid, buf);
+    }
+  }
+  if (!buf) {
+    throw new Error(`Mock CID not found: ${cid}`);
   }
   return buf;
 }

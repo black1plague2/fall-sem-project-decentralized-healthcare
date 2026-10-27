@@ -76,6 +76,47 @@ const { requireActor } = require('../services/authService');
 const ownerOnly = requireActor('01');
 router.post(['/heads', '/propose', '/:headId/finalize'], ownerOnly);
 
+// The simulated head lives in memory, and on serverless each instance has its
+// own copy, so a snapshot accepted by one instance is invisible to the next.
+// Every accepted snapshot is also stored in MongoDB: merge the recent real
+// ones back in so the feed always shows them, whichever instance answers.
+async function withPersistedSnapshots(headId, memorySnapshots, partyCount, limit = 12) {
+  let stored = [];
+  try {
+    stored = await HydraSnapshot.find({ headId, status: 'accepted' })
+      .sort({ createdAt: -1 }).limit(8).lean();
+  } catch (e) {
+    return memorySnapshots;
+  }
+  const byId = new Map();
+  for (const doc of stored) {
+    const rec = (doc.records || [])[0];
+    if (!rec) continue;
+    byId.set(doc.snapshotId, {
+      epoch: doc.epoch,
+      snapshotId: doc.snapshotId,
+      updateType: (doc.snapshot && doc.snapshot.updateType) || doc.updateType || 'SHARE_RECORD',
+      recordId: rec.recordId,
+      label: null,
+      synthetic: false,
+      permittedActors: rec.permittedActors || [],
+      confirmMs: null,
+      acceptedAt: new Date(doc.acceptedAt || doc.createdAt).getTime(),
+      signatures: (doc.signatures && doc.signatures.length) || partyCount,
+      digest: null,
+    });
+  }
+  for (const s of memorySnapshots) {
+    const prev = byId.get(s.snapshotId);
+    byId.set(s.snapshotId, prev ? { ...prev, ...s } : s);
+  }
+  const all = Array.from(byId.values()).sort((a, b) => b.acceptedAt - a.acceptedAt);
+  // Keep every real snapshot we found; fill the rest of the feed with traffic.
+  const realCount = all.filter((s) => !s.synthetic).length;
+  let room = Math.max(0, limit - realCount);
+  return all.filter((s) => !s.synthetic || room-- > 0);
+}
+
 router.get('/status', async (req, res) => {
   try {
     const { getOrCreateDefaultHead } = require('../services/hydraClient');
@@ -85,7 +126,9 @@ router.get('/status', async (req, res) => {
 
     if (mode === 'simulated') {
       const sim = require('../services/hydraSimulator');
-      return res.json({ mode, fallbackReason: hydraClient.fallbackReason, ...sim.getHeadStatus(headId) });
+      const status = sim.getHeadStatus(headId);
+      status.snapshots = await withPersistedSnapshots(headId, status.snapshots, status.parties.length);
+      return res.json({ mode, fallbackReason: hydraClient.fallbackReason, ...status });
     }
 
     // Real node: report what its API exposes.
