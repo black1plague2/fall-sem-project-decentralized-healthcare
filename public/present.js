@@ -245,7 +245,11 @@
           frames[r].state.textContent = 'signing in…';
           if ((sess.actors || []).indexOf(ID[r]) === -1) {
             var res = await fetch('/api/auth/demo-login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r }) });
-            if (!res.ok) throw new Error('Demo sign-in is off on this server. Sign in to the ' + NAME[r] + ' portal at /login first, then start the demo again.');
+            if (!res.ok) {
+              var why = ''; try { why = (await res.json()).error || ''; } catch (e) { /* no body */ }
+              throw new Error('Could not sign in to the ' + NAME[r] + ' portal (' + res.status + (why ? ': ' + why : '') + '). ' +
+                (sess.demoLogin === false ? 'One-click sign-in needs DEMO_MODE=true on the server; until then sign in to each portal at /login and start the demo again.' : 'Reload the page and try again.'));
+            }
           }
           await loadPortal(r);
           await wait(500);

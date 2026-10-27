@@ -1,5 +1,6 @@
 /* Guided demo — narration panel on the left, the four live portals on the right */
 html, body.present { height: 100%; overflow: hidden; }
+body.present { height: 100vh; height: 100dvh; }
 body.present { display: grid; grid-template-columns: 400px 1fr; background: var(--paper); color: var(--on-dark); font-family: 'Instrument Sans', system-ui, sans-serif; }
 
 /* ---------- narration ---------- */
@@ -75,5 +76,5 @@ body.present { display: grid; grid-template-columns: 400px 1fr; background: var(
   .stage { min-height: 70vh; }
   .finale__grid { grid-template-columns: 1fr; }
 }
-.narr__controls [hidden] { display: none !important; }
+.narr [hidden] { display: none !important; }
 .narr__controls .btn { padding: 11px 16px; font-size: 14px; white-space: nowrap; min-height: 0; }

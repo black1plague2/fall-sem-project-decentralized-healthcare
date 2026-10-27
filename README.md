@@ -115,6 +115,11 @@ test. Space pauses, → skips the wait, Esc stops. `/present?autostart=1`
 starts it straight away. It needs `DEMO_MODE=true` for one-click sign-in;
 otherwise sign in to each portal at `/login` first.
 
+Sign-in works on a fresh deploy without extra setup: the actors' password
+hashes ship in `config/actor-credentials.json`, and on Vercel the session key
+is derived from server-only settings. Setting `ACTOR_CREDENTIALS` and
+`SESSION_SECRET` (from `node scripts/setActorPasswords.js`) overrides both.
+
 Then open **http://localhost:4000** for the landing page and
 **http://localhost:4000/login** to sign in to a portal.
 

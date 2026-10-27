@@ -33,8 +33,9 @@ function sessionSecret() {
     return process.env.SESSION_SECRET;
   }
   // Locally a per-process secret is fine (sessions just end on restart).
-  // On Vercel every instance would invent a different one, so refuse.
-  if (ON_VERCEL) return null;
+  // On Vercel every instance would invent a different one, so derive one
+  // that all instances share from server-only configuration instead.
+  if (ON_VERCEL) return derivedSecret();
   if (!localSecret) localSecret = crypto.randomBytes(32).toString('hex');
   return localSecret;
 }
@@ -45,9 +46,29 @@ function hashPassword(password, saltHex) {
   return `scrypt$${salt.toString('hex')}$${hash.toString('hex')}`;
 }
 
+// Used only when SESSION_SECRET is not set on a serverless deploy: a key
+// derived from settings that exist only on the server (the database URI and
+// the packed demo keys), identical on every instance. Set SESSION_SECRET to
+// replace it.
+let derived = null;
+function derivedSecret() {
+  if (derived) return derived;
+  const material = [process.env.DB_URI, process.env.MONGODB_URI, process.env.DEMO_ACTOR_KEYS,
+    process.env.PINATA_JWT, process.env.BLOCKFROST_PROJECT_ID].filter(Boolean).join('|');
+  if (!material) console.warn('[auth] SESSION_SECRET is not set and no server-only settings exist to derive one from; set SESSION_SECRET');
+  derived = crypto.createHash('sha256').update('decentralized-healthcare/session/v1|' + material).digest('hex');
+  return derived;
+}
+
+// Scrypt hashes of the actor passwords, committed so a deploy works without
+// extra setup. ACTOR_CREDENTIALS, when set, replaces them.
+const DEFAULT_CREDENTIALS_FILE = require('path').join(__dirname, '../../config/actor-credentials.json');
+
 function loadCredentials() {
-  const raw = process.env.ACTOR_CREDENTIALS;
-  if (!raw) return null;
+  let raw = process.env.ACTOR_CREDENTIALS;
+  if (!raw) {
+    try { raw = require('fs').readFileSync(DEFAULT_CREDENTIALS_FILE, 'utf8'); } catch (e) { return null; }
+  }
   try {
     const parsed = JSON.parse(raw);
     const out = {};
