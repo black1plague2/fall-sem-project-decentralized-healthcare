@@ -9,7 +9,7 @@ const appRoutes = require('./routes/appRoutes');
 const hydraRoutes = require('./routes/hydraRoutes');
 const logRoutes = require('./routes/logRoutes');
 const authRoutes = require('./routes/authRoutes');
-const { requireSession } = require('./services/authService');
+const { requireSession, requireActingAs } = require('./services/authService');
 const { initRedis, healthCheck } = require('./services/cekManager');
 const { standardLimiter } = require('./services/rateLimiter');
 
@@ -187,7 +187,7 @@ app.use(authRoutes);
 // Everything that reads or changes health records needs a signed-in actor.
 // Per-actor checks (only the Patient may upload/revoke, a Doctor may only
 // request as the Doctor, ...) live next to each route in encryptionRoutes.
-app.use(['/api/encrypt', '/api/access', '/api/revoke', '/api/records', '/api/actors', '/api/logs', '/api/hydra'], requireSession);
+app.use(['/api/encrypt', '/api/access', '/api/revoke', '/api/records', '/api/actors', '/api/logs', '/api/hydra'], requireSession, requireActingAs);
 
 // Cached connection promise, keyed so a failed attempt doesn't get stuck:
 // on serverless, a fire-and-forget mongoose.connect() on cold start loses

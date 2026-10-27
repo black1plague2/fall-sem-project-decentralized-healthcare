@@ -21,15 +21,36 @@
   var ROLE_ACCENT = { '01': 'icon-badge--patient', '02': 'icon-badge--doctor', '03': 'icon-badge--hospital', '04': 'icon-badge--insurance' };
   function roleAccent(actorId) { return ROLE_ACCENT[actorId] || ''; }
 
+  // Which portal this page is. The server only serves /portal/<role> to a
+  // browser signed in as that actor and locks every API call to it.
+  var PORTAL_ROLE = document.body.dataset.role || 'patient';
+  var PORTAL_ACTOR = document.body.dataset.actor || '01';
+  var IS_OWNER = PORTAL_ACTOR === '01';
+
   var SECTION_META = {
     overview: { title: 'Overview' },
     upload: { title: 'Upload & Encrypt' },
-    records: { title: 'Records' },
-    access: { title: 'Access & Permissions' },
-    hydra: { title: 'Hydra L2 Head' },
-    audit: { title: 'Audit Log' },
+    records: { title: 'My Records' },
+    shared: { title: 'Shared With Me' },
+    access: { title: 'Request Access' },
+    hydra: { title: 'Hydra L2 Network' },
+    audit: { title: IS_OWNER ? 'Access History' : 'My Activity' },
     actors: { title: 'Actors' },
   };
+
+  // Each portal shows only what its actor can do.
+  var PORTAL_NAV = IS_OWNER ? [
+    { id: 'overview', icon: 'home', label: 'Overview' },
+    { id: 'upload', icon: 'cloudUpload', label: 'Upload & Encrypt' },
+    { id: 'records', icon: 'files', label: 'My Records' },
+    { id: 'audit', icon: 'clipboardList', label: 'Access History' },
+    { id: 'hydra', icon: 'zap', label: 'Hydra L2 Network', live: true },
+  ] : [
+    { id: 'overview', icon: 'home', label: 'Overview' },
+    { id: 'shared', icon: 'files', label: 'Shared With Me' },
+    { id: 'access', icon: 'shieldCheck', label: 'Request Access' },
+    { id: 'audit', icon: 'clipboardList', label: 'My Activity' },
+  ];
 
   var UPLOAD_FLOW = [
     { key: 'validate', label: 'Validate file' },
@@ -83,7 +104,10 @@
   // ---------------------------------------------------------------
   var state = {
     section: 'overview',
-    actorId: '01',
+    actorId: PORTAL_ACTOR,
+    lookupRecords: [],
+    lookupPatient: '',
+    preselectRecord: '',
     records: [],
     auditEvents: [],
     activeES: null,
@@ -240,12 +264,21 @@
     setTimeout(function () { t.remove(); }, 4200);
   }
 
+  function portalLoginUrl() { return '/login?role=' + PORTAL_ROLE + '&next=/portal/' + PORTAL_ROLE; }
+  function withPortalHeader(opts) {
+    opts = opts || {};
+    var h = opts.headers || {};
+    h['X-Acting-As'] = PORTAL_ACTOR;
+    opts.headers = h;
+    opts.credentials = 'same-origin';
+    return opts;
+  }
   async function api(path, opts) {
-    var res = await fetch(path, opts);
+    var res = await fetch(path, withPortalHeader(opts));
     var json = null;
     try { json = await res.json(); } catch (e) { /* no body */ }
     if (res.status === 401) {
-      location.assign('/login?next=/dashboard');
+      location.assign(portalLoginUrl());
     }
     if (!res.ok) {
       var msg = (json && (json.error || json.message)) || (res.status + ' ' + res.statusText);
@@ -450,6 +483,7 @@
       state.records = [];
     }
     renderRecordsListIfMounted();
+    renderSharedListIfMounted();
     renderAccessDropdownIfMounted();
     renderOverviewIfMounted();
     renderActorsIfMounted();
@@ -458,7 +492,9 @@
   async function loadAudit() {
     try {
       var res = await api('/api/logs/view?type=audit&lines=' + state.auditFilters.lines);
-      state.auditEvents = (res.logs || []).filter(function (l) { return l.event; });
+      // Sign-in events stay in the server's audit log; the portals show record activity.
+      var AUTH_EVENTS = { LOGIN_SUCCESS: 1, LOGIN_FAILED: 1, DEMO_LOGIN: 1, LOGOUT: 1 };
+      state.auditEvents = (res.logs || []).filter(function (l) { return l.event && !AUTH_EVENTS[l.event]; });
     } catch (e) {
       state.auditEvents = state.auditEvents || [];
     }
@@ -484,14 +520,29 @@
   // Sidebar nav + actor switching
   // ---------------------------------------------------------------
   function bindSidebar() {
+    var nav = $('#dashNav');
+    nav.innerHTML = PORTAL_NAV.map(function (n) {
+      return '<button class="dash-nav__item" data-section="' + n.id + '">' +
+        '<span class="dash-nav__icon" data-icon="' + n.icon + '"></span> ' + escapeHtml(n.label) +
+        (n.live ? ' <span class="dash-nav__live" id="hydraNavLive"></span>' : '') + '</button>';
+    }).join('');
     $all('.dash-nav__item').forEach(function (btn) {
       btn.addEventListener('click', function () { goToSection(btn.dataset.section); });
     });
-    $all('.actor-row').forEach(function (row) {
-      row.addEventListener('click', function () { switchActor(row.dataset.actor); });
-    });
     var out = $('#signOutBtn');
     if (out) out.addEventListener('click', signOut);
+  }
+
+  function renderPortalIdentity() {
+    var meta = ACTOR_META[PORTAL_ACTOR];
+    $('#portalName').textContent = meta.name;
+    $('#portalRole').textContent = IS_OWNER ? 'Record owner' : 'Requesting actor';
+    var g = $('#portalGlyph');
+    g.className = 'portal-id__glyph ' + roleAccent(PORTAL_ACTOR);
+    g.setAttribute('data-icon', roleIcon(PORTAL_ACTOR));
+    var chip = $('#portalChip');
+    chip.className = 'portal-chip ' + roleAccent(PORTAL_ACTOR);
+    chip.textContent = meta.name + ' portal';
   }
 
   // ---------------------------------------------------------------
@@ -499,29 +550,20 @@
   // ---------------------------------------------------------------
   var ROLE_SLUG = { '01': 'patient', '02': 'doctor', '03': 'hospital', '04': 'insurance' };
   function isSignedIn(actorId) { return state.sessionActors.indexOf(actorId) !== -1; }
-  function loginUrlFor(actorId) { return '/login?role=' + ROLE_SLUG[actorId] + '&next=/dashboard'; }
+  function loginUrlFor(actorId) { return '/login?role=' + ROLE_SLUG[actorId] + '&next=/portal/' + ROLE_SLUG[actorId]; }
 
-  // Switching to an actor you have not signed in as sends you to the login screen.
+  // A portal never switches actor: other actors have their own portals.
   function switchActor(actorId) {
-    if (!isSignedIn(actorId)) { location.assign(loginUrlFor(actorId)); return false; }
-    state.actorId = actorId;
-    $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === actorId); });
-    // Re-render the current section so role-gated content updates immediately.
-    renderSection(state.section);
-    return true;
+    if (actorId !== PORTAL_ACTOR) location.assign('/portal/' + ROLE_SLUG[actorId]);
+    return false;
   }
 
-  function renderSessionState() {
-    $all('.actor-row').forEach(function (r) {
-      var signed = isSignedIn(r.dataset.actor);
-      r.classList.toggle('is-locked', !signed);
-      r.title = signed ? 'Signed in' : 'Sign in as ' + ACTOR_META[r.dataset.actor].name;
-    });
-  }
-
+  // Signing out of a portal signs out only this actor on this browser.
   async function signOut() {
-    try { await fetch('/api/auth/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); } catch (e) { /* ignore */ }
-    location.assign('/login');
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actorId: PORTAL_ACTOR }) });
+    } catch (e) { /* ignore */ }
+    location.assign(portalLoginUrl());
   }
 
   function goToSection(id) {
@@ -538,6 +580,7 @@
     if (id === 'overview') renderOverview(content);
     else if (id === 'upload') renderUploadSection(content);
     else if (id === 'records') renderRecordsSection(content);
+    else if (id === 'shared') renderSharedSection(content);
     else if (id === 'access') renderAccessSection(content);
     else if (id === 'hydra') renderHydraSection(content);
     else if (id === 'audit') renderAuditSection(content);
@@ -550,40 +593,46 @@
   // ---------------------------------------------------------------
   function renderOverview(content) {
     stopAuditPolling();
-    var total = state.records.length;
-    var anchored = state.records.filter(function (r) { return r.status === 'uploaded' || r.status === 'anchored'; }).length;
-    var revoked = state.records.filter(function (r) { return r.status === 'revoked'; }).length;
     var lastEvent = state.auditEvents[0];
-
+    var meta = ACTOR_META[PORTAL_ACTOR];
+    var stats;
+    if (IS_OWNER) {
+      var shared = state.records.filter(function (r) { return (r.wrappedActors || []).some(function (a) { return a !== '01'; }); }).length;
+      var revoked = state.records.filter(function (r) { return r.status === 'revoked'; }).length;
+      stats = statCard('My records', state.records.length, 'encrypted in the vault') +
+        statCard('Shared', shared, 'records others can open') +
+        statCard('Revoked', revoked, 'key rotated on removal') +
+        statCard('Last activity', lastEvent ? timeAgo(lastEvent.timestamp) : '—', lastEvent ? prettyEvent(lastEvent.event) : 'no events yet');
+    } else {
+      var granted = state.auditEvents.filter(function (e) { return e.event === 'ACCESS_GRANTED'; }).length;
+      var denied = state.auditEvents.filter(function (e) { return e.event === 'ACCESS_DENIED'; }).length;
+      stats = statCard('Shared with me', state.records.length, 'records I can open') +
+        statCard('Granted', granted, 'my access requests') +
+        statCard('Refused', denied, 'my access requests') +
+        statCard('Last activity', lastEvent ? timeAgo(lastEvent.timestamp) : '—', lastEvent ? prettyEvent(lastEvent.event) : 'no events yet');
+    }
     content.innerHTML =
-      '<div class="demo-callout">' +
-        '<div class="demo-callout__text"><span class="demo-callout__kicker">Presenting?</span>' +
-        '<strong>Watch the whole system run by itself</strong>' +
-        '<span>Upload, Hydra L2 sharing, the 4-layer permission check, decryption, revocation with key rotation, and the audit trail, narrated step by step.</span></div>' +
-        '<button class="btn btn--demo" data-start-demo type="button"><span data-icon="play" class="btn__icon"></span> Run full demo</button>' +
+      '<div class="portal-hero ' + roleAccent(PORTAL_ACTOR) + '">' +
+        '<span class="portal-hero__glyph" data-icon="' + roleIcon(PORTAL_ACTOR) + '"></span>' +
+        '<div><div class="portal-hero__kicker">' + escapeHtml(meta.name) + ' portal · ' + (IS_OWNER ? 'record owner' : 'requesting actor') + '</div>' +
+        '<p class="portal-hero__text">' + roleBlurb(PORTAL_ACTOR) + '</p></div>' +
       '</div>' +
-      '<div class="stat-grid" id="overviewStats">' +
-        statCard('Total records', total, 'in this vault') +
-        statCard('Active grants', anchored, 'uploaded / anchored') +
-        statCard('Revoked', revoked, 'CEK rotated on removal') +
-        statCard('Last activity', lastEvent ? timeAgo(lastEvent.timestamp) : '—', lastEvent ? prettyEvent(lastEvent.event) : 'no events yet') +
-      '</div>' +
+      '<div class="stat-grid" id="overviewStats">' + stats + '</div>' +
       '<div class="panel">' +
-        panelHeadHtml(roleIcon(state.actorId), 'Acting as ' + escapeHtml(ACTOR_META[state.actorId].name), null, ACTOR_META[state.actorId].role, null, roleAccent(state.actorId)) +
-        '<p style="color:var(--ink-soft);font-size:14px;line-height:1.6">' + roleBlurb(state.actorId) + '</p>' +
+        panelHeadHtml('sparkles', 'What you can do here', null, '', null) +
         '<div class="quick-actions">' +
-          (state.actorId === '01' ? '<button class="btn" data-goto="upload">Upload a record</button>' : '<button class="btn" data-goto="access">Request access</button>') +
-          '<button class="btn btn--ghost-outline" data-goto="records">View records</button>' +
-          '<button class="btn btn--ghost-outline" data-goto="audit">View audit log</button>' +
+          (IS_OWNER
+            ? '<button class="btn" data-goto="upload">Upload a record</button><button class="btn btn--ghost-outline" data-goto="records">Manage who has access</button><button class="btn btn--ghost-outline" data-goto="audit">See who opened what</button>'
+            : '<button class="btn" data-goto="access">Request access to a record</button><button class="btn btn--ghost-outline" data-goto="shared">Records shared with me</button><button class="btn btn--ghost-outline" data-goto="audit">My activity</button>') +
         '</div>' +
       '</div>' +
       '<div class="two-col two-col--even" style="margin-top:22px">' +
         '<div class="panel">' +
-          panelHeadHtml('network', 'Verification layers', null, 'fastest → most authoritative', null) +
+          panelHeadHtml('network', 'How my requests are checked', null, 'fastest → most authoritative', null) +
           '<div class="layer-ladder">' + layerLadderHtml() + '</div>' +
         '</div>' +
         '<div class="panel">' +
-          panelHeadHtml('clipboardList', 'Recent activity', null, 'last 5 events', null) +
+          panelHeadHtml('clipboardList', IS_OWNER ? 'Recent activity on my records' : 'My recent activity', null, 'last 5 events', null) +
           '<div id="overviewRecent"></div>' +
         '</div>' +
       '</div>';
@@ -591,11 +640,8 @@
     $all('[data-goto]', content).forEach(function (b) {
       b.addEventListener('click', function () { goToSection(b.dataset.goto); });
     });
-    $all('[data-start-demo]', content).forEach(function (b) {
-      b.addEventListener('click', function () { if (window.VaultTour) window.VaultTour.start(); });
-    });
     $all('[data-layer-goto]', content).forEach(function (b) {
-      b.addEventListener('click', function () { goToSection('hydra'); });
+      b.addEventListener('click', function () { if (IS_OWNER) goToSection('hydra'); });
     });
     renderOverviewRecentIfMounted();
     injectIcons(content);
@@ -624,10 +670,10 @@
   }
   function roleBlurb(actorId) {
     return {
-      '01': 'You own every record you upload. You can grant Doctor, Hospital or Insurance access at upload time, and you\'re the only actor who can revoke it — which re-encrypts the file under a brand-new key.',
-      '02': 'You can request access to any record a Patient has granted you. The server checks Hydra L2 first, then falls back through Aiken, Midnight and Blockfrost until one layer resolves the request.',
-      '03': 'Institutional access for admissions and care coordination — scoped to exactly the records a Patient has granted the Hospital actor.',
-      '04': 'Claims verification access — scoped to exactly the records a Patient has granted the Insurance actor, nothing more.',
+      '01': 'You own every record you upload. You decide who can open each one, and you are the only actor who can revoke access, which re-encrypts the file under a brand-new key.',
+      '02': 'Open the records a patient has shared with you for treatment. Every request is checked through Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1, and you never see who else has access.',
+      '03': 'Hospital access for admissions and care coordination, limited to the records a patient has shared with the hospital. You never see who else has access.',
+      '04': 'Claims verification, limited to the records a patient has explicitly shared with the insurer. Anything else is refused by the permission cascade.',
     }[actorId];
   }
   function renderOverviewIfMounted() {
@@ -743,6 +789,58 @@
   }
 
   // ---------------------------------------------------------------
+  // Shared with me (requesting actors) — the server only returns records
+  // this actor holds a key for, and never the other people on the list.
+  // ---------------------------------------------------------------
+  function renderSharedSection(content) {
+    stopAuditPolling();
+    content.innerHTML =
+      '<div class="panel">' +
+        '<div class="panel-head"><div class="panel-head__title"><span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="files"></span><h2>Records shared with me</h2></div><button class="ghost-btn" id="refreshSharedBtn" type="button">refresh</button></div>' +
+        '<p class="section-note">Only records a patient has shared with the ' + escapeHtml(ACTOR_META[PORTAL_ACTOR].name) + ' appear here. Who else can open them stays private.</p>' +
+        '<div class="records-list" id="sharedListMount"></div>' +
+      '</div>';
+    $('#refreshSharedBtn').addEventListener('click', function () { loadRecords(); toast('Refreshed'); });
+    renderSharedListIfMounted();
+    injectIcons(content);
+  }
+  function renderSharedListIfMounted() {
+    var mount = $('#sharedListMount');
+    if (!mount) return;
+    if (!state.records.length) { mount.innerHTML = '<p class="empty-note">Nothing has been shared with you yet.</p>'; return; }
+    mount.innerHTML = state.records.map(function (r) {
+      var name = (r.metadata && r.metadata.originalName) || 'untitled';
+      return '<div class="record-card shared-card">' +
+        '<div class="record-card__top"><span class="record-card__name">' + escapeHtml(name) + '</span><span class="record-card__status">' + escapeHtml(r.status) + '</span></div>' +
+        '<div class="record-card__meta">Patient ' + escapeHtml((r.metadata && r.metadata.patientId) || '—') + ' · shared ' + timeAgo(r.createdAt) + '</div>' +
+        '<button class="btn shared-card__btn" data-request="' + r.recordId + '" type="button">Request access</button>' +
+      '</div>';
+    }).join('');
+    $all('[data-request]', mount).forEach(function (b) {
+      b.addEventListener('click', function () { state.preselectRecord = b.dataset.request; goToSection('access'); });
+    });
+  }
+
+  async function lookupPatient(patientId) {
+    patientId = String(patientId || '').trim();
+    if (!patientId) return [];
+    try {
+      var res = await api('/api/records/lookup?patientId=' + encodeURIComponent(patientId));
+      state.lookupRecords = res.records || [];
+      state.lookupPatient = patientId;
+    } catch (e) {
+      state.lookupRecords = [];
+      toast('Lookup failed: ' + e.message, true);
+    }
+    renderAccessDropdownIfMounted();
+    var note = $('#lookupNote');
+    if (note) note.textContent = state.lookupRecords.length
+      ? state.lookupRecords.length + ' record(s) found for ' + patientId + '. Whether you may open them is decided only when you request.'
+      : 'No records found for ' + patientId + '.';
+    return state.lookupRecords;
+  }
+
+  // ---------------------------------------------------------------
   // Access section
   // ---------------------------------------------------------------
   function renderAccessSection(content) {
@@ -758,6 +856,7 @@
         '<div class="panel">' +
           panelHeadHtml('shieldCheck', 'Request Access', null, 'as ' + meta.name, null) +
           walletWidgetHtml(state.actorId) +
+          '<div class="field"><label>Find a patient\'s records</label><div class="lookup-row"><input type="text" id="lookupInput" placeholder="Patient ID, e.g. patient-001" value="' + escapeHtml(state.lookupPatient) + '" /><button class="ghost-btn" id="lookupBtn" type="button">look up</button></div><div class="field-hint" id="lookupNote"></div></div>' +
           '<div class="field"><label>Record</label><select id="recordSelect"><option value="">Select a record…</option>' + recordOptions() + '</select></div>' +
           '<button class="btn btn--block" id="requestBtn" disabled>Connect wallet &amp; choose a record</button>' +
           '<div class="divider-note">This walks the real 4-layer permission cascade on the server. Whichever layer actually grants access — Hydra, Aiken, Midnight or Blockfrost — will be highlighted.</div>' +
@@ -775,6 +874,9 @@
       btn.textContent = !walletOk ? 'Connect wallet to continue' : !sel.value ? 'Choose a record to continue' : 'Request Access';
     }
     sel.addEventListener('change', function () { $('#unlockArea').innerHTML = ''; refreshGate(); });
+    $('#lookupBtn').addEventListener('click', function () { lookupPatient($('#lookupInput').value).then(refreshGate); });
+    $('#lookupInput').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lookupPatient($('#lookupInput').value).then(refreshGate); } });
+    if (state.preselectRecord) { sel.value = state.preselectRecord; state.preselectRecord = ''; }
     bindWalletWidget(content, refreshGate);
     btn.addEventListener('click', function () { runAccessRequest(sel.value); });
     refreshGate();
@@ -782,10 +884,17 @@
   }
 
   function recordOptions() {
-    return state.records.map(function (r) {
+    function opt(r) {
       var name = (r.metadata && r.metadata.originalName) || r.recordId;
       return '<option value="' + r.recordId + '">' + escapeHtml(name) + ' — ' + escapeHtml((r.metadata && r.metadata.patientId) || '') + ' (' + shortId(r.recordId) + ')</option>';
-    }).join('');
+    }
+    var sharedIds = {};
+    state.records.forEach(function (r) { sharedIds[r.recordId] = true; });
+    var extra = state.lookupRecords.filter(function (r) { return !sharedIds[r.recordId]; });
+    var html = '';
+    if (state.records.length) html += '<optgroup label="Shared with me">' + state.records.map(opt).join('') + '</optgroup>';
+    if (extra.length) html += '<optgroup label="Found by patient lookup">' + extra.map(opt).join('') + '</optgroup>';
+    return html;
   }
   function renderAccessDropdownIfMounted() {
     var sel = $('#recordSelect');
@@ -856,11 +965,11 @@
     if (area) area.innerHTML = '<p class="empty-note">Unwrapping key and decrypting on the server…</p>';
     try {
       var signed = await signWithWallet(actorId, 'unlock', recordId, { actorId: actorId });
-      var res = await fetch('/api/encrypt/unlock', {
+      var res = await fetch('/api/encrypt/unlock', withPortalHeader({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recordId: recordId, actorId: actorId, actorAddr: signed.address, actorSignature: signed.signature, timestamp: signed.timestamp }),
-      });
+      }));
       if (!res.ok) {
         var errBody = await res.json().catch(function () { return {}; });
         throw new Error(errBody.error || (res.status + ' ' + res.statusText));
@@ -1312,7 +1421,7 @@
   }
   function roleGateHtml(message, switchTo) {
     return '<div class="panel"><div class="role-note"><strong>Heads up —</strong>&nbsp;' + escapeHtml(message) + '</div>' +
-      (switchTo ? '<button class="btn" data-switch-actor="' + switchTo + '">Switch to ' + escapeHtml(ACTOR_META[switchTo].name) + '</button>' : '') +
+      (switchTo ? '<a class="btn" href="/portal/' + ROLE_SLUG[switchTo] + '">Open the ' + escapeHtml(ACTOR_META[switchTo].name) + ' portal</a>' : '') +
     '</div>';
   }
   function bindRoleGate(content) {
@@ -1384,18 +1493,16 @@
   // Boot
   // ---------------------------------------------------------------
   document.addEventListener('DOMContentLoaded', async function () {
-    // No session, no dashboard: the server already redirects, this covers expiry.
+    // The server only serves a portal to a signed-in actor; this covers expiry.
     try {
       var sess = await api('/api/auth/session');
       state.sessionActors = sess.actors || [];
     } catch (e) { state.sessionActors = []; }
-    if (!state.sessionActors.length) { location.assign('/login?next=/dashboard'); return; }
-    state.actorId = isSignedIn('01') ? '01' : state.sessionActors[0];
+    if (!isSignedIn(PORTAL_ACTOR)) { location.assign(portalLoginUrl()); return; }
 
     bindSidebar();
+    renderPortalIdentity();
     injectIcons(document);
-    renderSessionState();
-    $('.actor-row[data-actor="' + state.actorId + '"]').classList.add('is-active');
     $('.dash-nav__item[data-section="overview"]').classList.add('is-active');
     loadRecords();
     loadAudit();
@@ -1407,23 +1514,27 @@
       renderLayerStrip(cfg);
       renderOverviewIfMounted();
     }).catch(function () { /* keep defaults */ });
-    loadHydra();
-
-    $('#runDemoBtn').addEventListener('click', function () { if (window.VaultTour) window.VaultTour.start(); });
+    if (IS_OWNER) loadHydra();
   });
 
-  // Hooks for the guided demo (public/demo-tour.js). It drives the same
+  // Hooks for the guided demo (public/present.js), which drives each portal through the same
   // functions the buttons call, so everything it shows is the real backend.
   window.VaultDash = {
     state: state,
     goToSection: goToSection,
     isSignedIn: isSignedIn,
     loginUrlFor: loginUrlFor,
+    actorId: PORTAL_ACTOR,
     setActor: function (actorId) {
-      if (!isSignedIn(actorId)) throw new Error('Not signed in as ' + ACTOR_META[actorId].name);
-      state.actorId = actorId;
-      $all('.actor-row').forEach(function (r) { r.classList.toggle('is-active', r.dataset.actor === actorId); });
+      if (actorId !== PORTAL_ACTOR) throw new Error('This is the ' + ACTOR_META[PORTAL_ACTOR].name + ' portal');
     },
+    lookupPatient: lookupPatient,
+    selectRecord: function (recordId) {
+      var sel = $('#recordSelect');
+      if (sel) { sel.value = recordId; sel.dispatchEvent(new Event('change')); }
+      else state.preselectRecord = recordId;
+    },
+    renderSection: renderSection,
     connectDemoWallet: function (actorId) { return connectDemoWallet(actorId); },
     isDemoMode: function () { return SERVER_DEMO_MODE; },
     runUpload: runUpload,

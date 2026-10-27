@@ -9,6 +9,7 @@ const {
   revokeHandler,
   metadataHandler,
   listRecordsHandler,
+  lookupRecordsHandler,
   uploadProgressHandler,
   proposeShareHandler,
 } = require('../controllers/encryptionController');
@@ -29,7 +30,8 @@ router.post('/api/encrypt/upload', patientOnly, upload.single('file'), uploadHan
 router.post('/api/encrypt/pin-and-anchor', patientOnly, pinAndAnchorHandler);
 router.post('/api/encrypt/confirm-anchor', patientOnly, confirmAnchorHandler);
 router.get('/api/records', listRecordsHandler);
-router.get('/api/records/:recordId/metadata', metadataHandler);
+router.get('/api/records/lookup', lookupRecordsHandler);
+router.get('/api/records/:recordId/metadata', patientOnly, metadataHandler);
 router.get('/api/encrypt/progress/:sessionId', uploadProgressHandler);
 // Same generic SSE-by-session mechanism, aliased for readability from the
 // access-request and revoke flows (all three share one progressService).

@@ -595,6 +595,13 @@ async function getAuditLogsFromMongo(req, res) {
     ...(d.details || {}),
   }));
 
+  // The Patient owns every record, so sees the full trail. A requesting
+  // actor only sees its own requests and decisions.
+  const viewer = req.actingAs || '01';
+  if (viewer !== '01') {
+    logs = logs.filter((log) => log.actorId === viewer || (Array.isArray(log.actorIds) && log.actorIds.includes(viewer)));
+  }
+
   if (search) {
     const searchLower = search.toLowerCase();
     logs = logs.filter((log) => JSON.stringify(log).toLowerCase().includes(searchLower));

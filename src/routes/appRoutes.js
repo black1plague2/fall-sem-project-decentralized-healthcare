@@ -1,5 +1,6 @@
 const express = require('express');
 const path = require('path');
+const fs = require('fs');
 const appController = require('../controllers/appController');
 const { getSession } = require('../services/authService');
 
@@ -16,12 +17,53 @@ router.get('/demo', (req, res) => {
   res.sendFile(path.join(__dirname, '../../public/demo.html'));
 });
 
-// Main dashboard (sidebar-navigated app shell — upload, records, access, audit log, actors)
-// Signed-out visitors are sent to the login screen first.
-router.get('/dashboard', (req, res) => {
-  if (!getSession(req)) return res.redirect('/login?next=/dashboard');
+// Each actor has its own portal: /portal/patient, /portal/doctor,
+// /portal/hospital, /portal/insurance. A portal opens only for a browser
+// signed in as that actor, and the page itself is locked to that actor;
+// every API call it makes is checked against it on the server.
+const PORTALS = {
+  patient: { id: '01', name: 'Patient' },
+  doctor: { id: '02', name: 'Doctor' },
+  hospital: { id: '03', name: 'Hospital' },
+  insurance: { id: '04', name: 'Insurance' },
+};
+let portalTemplate = null;
+function portalHtml(role) {
+  if (!portalTemplate) {
+    portalTemplate = fs.readFileSync(path.join(__dirname, '../../public/dashboard.html'), 'utf8');
+  }
+  const p = PORTALS[role];
+  return portalTemplate
+    .replace('<title>Dashboard — Cardano Healthcare Vault</title>', `<title>${p.name} Portal — Decentralized Healthcare</title>`)
+    .replace('<body>', `<body class="portal portal--${role}" data-role="${role}" data-actor="${p.id}">`);
+}
+
+router.get('/portal/:role', (req, res) => {
+  const role = String(req.params.role || '').toLowerCase();
+  if (!PORTALS[role]) return res.redirect('/login');
+  const session = getSession(req);
+  if (!session || !session.actors.includes(PORTALS[role].id)) {
+    return res.redirect(`/login?role=${role}&next=/portal/${role}`);
+  }
   res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(__dirname, '../../public/dashboard.html'));
+  res.type('html').send(portalHtml(role));
+});
+
+// The old single dashboard now forwards to a portal: the Patient's if signed
+// in, else the first signed-in actor's, else the portal chooser.
+router.get('/dashboard', (req, res) => {
+  const session = getSession(req);
+  if (!session) return res.redirect('/login');
+  const id = session.actors.includes('01') ? '01' : session.actors[0];
+  const role = Object.keys(PORTALS).find((r) => PORTALS[r].id === id);
+  res.redirect(`/portal/${role}`);
+});
+
+// Presenter mode: the four portals side by side and a narrated, end-to-end
+// run of every feature. Static page; it signs each portal in on its own.
+router.get('/present', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, '../../public/present.html'));
 });
 
 // Midnight ZK health and statistics

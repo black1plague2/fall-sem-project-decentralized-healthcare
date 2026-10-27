@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Sign in — Cardano Healthcare Vault</title>
+<title>Sign in — Decentralized Healthcare</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,10 +18,10 @@
   <section class="login__intro">
     <a class="login__brand" href="/">
       <span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span>
-      <span>Cardano Healthcare Vault</span>
+      <span>Decentralized Healthcare</span>
     </a>
-    <h1>Sign in to the vault</h1>
-    <p class="login__lede">Each actor signs in with their own account. The server checks every request against who is signed in, so a Doctor can never act as the Patient, and nobody reaches a record without a session.</p>
+    <h1>Sign in to your portal</h1>
+    <p class="login__lede">Patient, Doctor, Hospital and Insurance each have their own portal and their own account. A portal is locked to the actor who signed in, and the server checks every request against it, so a Doctor can never act as the Patient or see who else has access.</p>
     <ul class="login__facts">
       <li><span data-icon="lockKeyhole"></span> Passwords stored only as scrypt hashes</li>
       <li><span data-icon="shieldCheck"></span> Signed, HttpOnly session cookie, 8 hour expiry</li>
@@ -30,7 +30,7 @@
   </section>
 
   <section class="login__card" aria-labelledby="loginTitle">
-    <h2 id="loginTitle">Choose your role</h2>
+    <h2 id="loginTitle">Choose your portal</h2>
     <div class="role-grid" role="radiogroup" aria-label="Role">
       <button type="button" class="role" role="radio" aria-checked="false" data-role="patient" data-actor="01">
         <span class="role__glyph icon-badge--patient" data-icon="user"></span><span class="role__name">Patient</span><span class="role__hint">Owner</span><span class="role__done" data-icon="checkCircle2"></span>
@@ -67,14 +67,14 @@
         <button type="button" class="demo-btn demo-btn--hospital" data-demo-role="hospital"><span data-icon="building2"></span> Hospital</button>
         <button type="button" class="demo-btn demo-btn--insurance" data-demo-role="insurance"><span data-icon="umbrella"></span> Insurance</button>
       </div>
-      <button type="button" class="btn btn--block demo-btn--all" data-demo-role="all"><span data-icon="users"></span> Sign in as all four roles</button>
+      <a class="btn btn--block demo-btn--all" href="/present"><span data-icon="play"></span> Run the guided demo (all four portals)</a>
     </div>
 
     <div class="login__signed" id="signedBlock" hidden>
-      <p>Signed in on this browser: <strong id="signedList"></strong></p>
+      <p>Signed in on this browser:</p>
+      <div class="portal-links" id="portalLinks"></div>
       <div class="login__actions">
-        <a class="btn" id="continueBtn" href="/dashboard">Continue to dashboard</a>
-        <button class="btn btn--ghost-outline" id="logoutAll" type="button">Sign out everyone</button>
+        <button class="btn btn--ghost-outline" id="logoutAll" type="button">Sign out of every portal</button>
       </div>
     </div>
   </section>

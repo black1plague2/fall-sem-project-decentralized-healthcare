@@ -152,12 +152,44 @@ function requireActor(actorOf) {
       const name = ACTOR_NAMES[actorId] || 'this actor';
       return res.status(403).json({ error: `You are not signed in as ${name}` });
     }
+    // A portal can only act as its own actor, even if other actors are
+    // signed in on the same browser (e.g. four portals open side by side).
+    const portal = req.actingAs || actingAs(req);
+    if (portal && portal !== String(actorId)) {
+      return res.status(403).json({ error: `The ${ACTOR_NAMES[portal]} portal cannot act as ${ACTOR_NAMES[actorId] || 'another actor'}` });
+    }
     next();
   };
 }
 
+// actingAs(req) — which signed-in actor this request speaks for. Each portal
+// sends an X-Acting-As header with its own actor id; the header must name an
+// actor that is actually signed in on this browser, otherwise null (refused).
+// Without the header (scripts, older clients) the Patient is assumed when
+// signed in, else the first signed-in actor.
+function actingAs(req) {
+  const session = req.session || getSession(req);
+  if (!session) return null;
+  const wanted = String(req.headers['x-acting-as'] || '').trim();
+  if (wanted) return session.actors.includes(wanted) ? wanted : null;
+  return session.actors.includes('01') ? '01' : session.actors[0];
+}
+
+// Refuses a request whose X-Acting-As names an actor that is not signed in.
+function requireActingAs(req, res, next) {
+  const actorId = actingAs(req);
+  if (!actorId) {
+    const name = ACTOR_NAMES[String(req.headers['x-acting-as'] || '')] || 'that actor';
+    return res.status(403).json({ error: `You are not signed in as ${name}`, login: '/login' });
+  }
+  req.actingAs = actorId;
+  next();
+}
+
 module.exports = {
   COOKIE,
+  actingAs,
+  requireActingAs,
   ROLES,
   ACTOR_NAMES,
   hashPassword,

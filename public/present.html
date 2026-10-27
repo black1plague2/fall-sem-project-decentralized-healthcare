@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Guided Demo — Decentralized Healthcare</title>
+<meta name="description" content="A narrated, end-to-end run of every feature across the four actor portals." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/base.css" />
+<link rel="stylesheet" href="/present.css" />
+</head>
+<body class="present">
+
+<aside class="narr" aria-live="polite">
+  <a class="narr__brand" href="/"><span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span> Decentralized Healthcare</a>
+
+  <div class="narr__progress"><div class="narr__bar" id="progressBar"></div></div>
+  <div class="narr__count" id="stepCount">Guided demo</div>
+
+  <div class="narr__actor" id="stepActor" hidden></div>
+  <h1 class="narr__title" id="stepTitle">See the whole system, end to end</h1>
+  <div class="narr__theory" id="stepTheory">
+    <p>This demo runs every feature of the project on the live backend, one step at a time. Each step explains the idea behind it, performs it in the right actor's portal, and checks the result.</p>
+    <p>The four actors each have their <strong>own portal and sign-in</strong>. Watch the right-hand side: the portal that is acting is shown large.</p>
+  </div>
+  <div class="narr__watch" id="stepWatch" hidden></div>
+  <div class="narr__check" id="stepCheck" hidden></div>
+
+  <div class="narr__spacer"></div>
+
+  <ol class="narr__results" id="results" hidden></ol>
+
+  <div class="narr__controls">
+    <button class="btn btn--demo-hero" id="startBtn" type="button"><span data-icon="play"></span> Start the demo</button>
+    <button class="btn btn--ghost-outline on-dark-bg" id="pauseBtn" type="button" hidden>Pause</button>
+    <button class="btn btn--ghost-outline on-dark-bg" id="nextBtn" type="button" hidden>Next &rarr;</button>
+  </div>
+  <p class="narr__keys" id="keysHint">Space pauses · → skips the wait · Esc stops</p>
+</aside>
+
+<main class="stage" id="stage">
+  <div class="frame" data-role="patient" data-actor="01">
+    <div class="frame__label"><span class="frame__dot icon-badge--patient"></span> Patient portal <span class="frame__state" data-state>signed out</span></div>
+    <div class="frame__viewport"><iframe title="Patient portal" data-frame="patient"></iframe><div class="frame__placeholder" data-placeholder><span data-icon="user"></span><span>Patient portal</span><small>not signed in yet</small></div></div>
+  </div>
+  <div class="frame" data-role="doctor" data-actor="02">
+    <div class="frame__label"><span class="frame__dot icon-badge--doctor"></span> Doctor portal <span class="frame__state" data-state>signed out</span></div>
+    <div class="frame__viewport"><iframe title="Doctor portal" data-frame="doctor"></iframe><div class="frame__placeholder" data-placeholder><span data-icon="stethoscope"></span><span>Doctor portal</span><small>not signed in yet</small></div></div>
+  </div>
+  <div class="frame" data-role="hospital" data-actor="03">
+    <div class="frame__label"><span class="frame__dot icon-badge--hospital"></span> Hospital portal <span class="frame__state" data-state>signed out</span></div>
+    <div class="frame__viewport"><iframe title="Hospital portal" data-frame="hospital"></iframe><div class="frame__placeholder" data-placeholder><span data-icon="building2"></span><span>Hospital portal</span><small>not signed in yet</small></div></div>
+  </div>
+  <div class="frame" data-role="insurance" data-actor="04">
+    <div class="frame__label"><span class="frame__dot icon-badge--insurance"></span> Insurance portal <span class="frame__state" data-state>signed out</span></div>
+    <div class="frame__viewport"><iframe title="Insurance portal" data-frame="insurance"></iframe><div class="frame__placeholder" data-placeholder><span data-icon="umbrella"></span><span>Insurance portal</span><small>not signed in yet</small></div></div>
+  </div>
+</main>
+
+<script src="/icons.js"></script>
+<script src="/present.js"></script>
+</body>
+</html>

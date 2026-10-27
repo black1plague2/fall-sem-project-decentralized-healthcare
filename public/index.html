@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Cardano Healthcare Vault</title>
+<title>Decentralized Healthcare</title>
 <meta name="description" content="A patient-owned, blockchain-verified electronic health record — encrypted client-side, anchored across four independent verification layers." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpath fill='%23141210' d='M50 6c25 0 44 20 44 45S75 96 50 96 6 75 6 51 25 6 50 6Z'/%3E%3C/svg%3E" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -19,13 +19,13 @@
 <nav class="site-nav">
   <a class="site-nav__brand" href="/">
     <span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span>
-    Cardano Healthcare Vault
+    Decentralized Healthcare
   </a>
   <div class="site-nav__links">
     <a href="#how-it-works">How it works</a>
     <a href="#layers">Architecture</a>
     <a href="#roles">Roles</a>
-    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+    <a class="btn" href="/login">Sign in to a portal <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
   </div>
 </nav>
 
@@ -33,11 +33,11 @@
   <h1 class="hero-title">A medical record<br/>only <em style="font-style:italic">you</em> unlock.</h1>
   <p class="hero-sub">Files are encrypted on the server with AES-256-GCM and pinned to IPFS. The decryption key is never handed out on a database flag — every request is re-verified across four independent, increasingly-authoritative layers: Hydra L2, Aiken L1, Midnight ZK and Blockfrost L1.</p>
   <div class="hero-cta">
-    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Take the guided tour</a>
-    <a class="btn btn--ghost-outline on-dark-bg" href="/dashboard">Open dashboard</a>
+    <a class="btn btn--demo-hero" href="/present"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the guided demo</a>
+    <a class="btn btn--ghost-outline on-dark-bg" href="/login">Sign in to a portal</a>
     <a class="btn btn--ghost-outline on-dark-bg" href="#how-it-works">How it works</a>
   </div>
-  <p class="hero-demo-note">About 2 minutes. Upload, share, verify, decrypt and revoke, live and narrated.</p>
+  <p class="hero-demo-note">About 3 minutes. All four portals side by side: upload, share, verify, decrypt, refuse and revoke, live, explained and checked.</p>
 
   <div class="hero-graphic" aria-hidden="true">
     <svg class="hero-graphic__line" viewBox="0 0 520 220" fill="none">
@@ -65,7 +65,7 @@
     <p class="section-sub">Everything below actually happens on the server when you use the dashboard — each step is streamed live as it runs.</p>
   </div>
   <div class="how-list">
-    <div class="how-item"><span class="how-item__index">01</span><div><div class="how-item__title">Encrypt client-side</div><div class="how-item__desc">A fresh 256-bit key (CEK) is generated per file and used for AES-256-GCM authenticated encryption — tamper-evident, not just confidential.</div></div></div>
+    <div class="how-item"><span class="how-item__index">01</span><div><div class="how-item__title">Encrypt on the server</div><div class="how-item__desc">A fresh 256-bit key (CEK) is generated per file and used for AES-256-GCM authenticated encryption — tamper-evident, not just confidential.</div></div></div>
     <div class="how-item"><span class="how-item__index">02</span><div><div class="how-item__title">Pin to IPFS</div><div class="how-item__desc">The encrypted package (never the plaintext) is content-addressed and pinned to IPFS. The CID is hashed and anchored, not the file itself.</div></div></div>
     <div class="how-item"><span class="how-item__index">03</span><div><div class="how-item__title">Wrap the key per actor</div><div class="how-item__desc">The CEK is individually wrapped with RSA-OAEP for each authorized actor — Doctor, Hospital, Insurance — so no two actors share a copy of the same key material.</div></div></div>
     <div class="how-item"><span class="how-item__index">04</span><div><div class="how-item__title">Anchor &amp; share on Hydra L2</div><div class="how-item__desc">The permission record is anchored and proposed to a Hydra Layer-2 head for near-instant (5&ndash;15ms target) off-chain permission checks.</div></div></div>
@@ -112,13 +112,13 @@
   <div class="section-head">
     <p class="section-eyebrow">Actors</p>
     <h2 class="section-title">Built for four roles</h2>
-    <p class="section-sub">Every permission decision is owner-controlled: the Patient grants and revokes, everyone else requests.</p>
+    <p class="section-sub">Each role has its own portal and its own sign-in. The Patient grants and revokes; everyone else can only request.</p>
   </div>
   <div class="roles-grid">
-    <div class="role-card"><div class="role-card__glyph icon-badge--patient" data-icon="user"></div><div class="role-card__name">Patient</div><div class="role-card__role">Owner</div><div class="role-card__desc">Uploads records, grants access, and is the only actor who can revoke it.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--doctor" data-icon="stethoscope"></div><div class="role-card__name">Doctor</div><div class="role-card__role">Requester</div><div class="role-card__desc">Requests access to treat a patient; access is scoped to records they've been granted.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--hospital" data-icon="building2"></div><div class="role-card__name">Hospital</div><div class="role-card__role">Requester</div><div class="role-card__desc">Institutional access for admissions, records handling and coordination of care.</div></div>
-    <div class="role-card"><div class="role-card__glyph icon-badge--insurance" data-icon="umbrella"></div><div class="role-card__name">Insurance</div><div class="role-card__role">Requester</div><div class="role-card__desc">Verifies claims against records it has explicitly been granted access to — nothing more.</div></div>
+    <a class="role-card role-card--link" href="/portal/patient"><div class="role-card__glyph icon-badge--patient" data-icon="user"></div><div class="role-card__name">Patient</div><div class="role-card__role">Owner</div><div class="role-card__desc">Uploads records, grants access, and is the only actor who can revoke it.</div><div class="role-card__go">Open Patient portal &rarr;</div></a>
+    <a class="role-card role-card--link" href="/portal/doctor"><div class="role-card__glyph icon-badge--doctor" data-icon="stethoscope"></div><div class="role-card__name">Doctor</div><div class="role-card__role">Requester</div><div class="role-card__desc">Requests access to treat a patient; access is scoped to records they've been granted.</div><div class="role-card__go">Open Doctor portal &rarr;</div></a>
+    <a class="role-card role-card--link" href="/portal/hospital"><div class="role-card__glyph icon-badge--hospital" data-icon="building2"></div><div class="role-card__name">Hospital</div><div class="role-card__role">Requester</div><div class="role-card__desc">Institutional access for admissions, records handling and coordination of care.</div><div class="role-card__go">Open Hospital portal &rarr;</div></a>
+    <a class="role-card role-card--link" href="/portal/insurance"><div class="role-card__glyph icon-badge--insurance" data-icon="umbrella"></div><div class="role-card__name">Insurance</div><div class="role-card__role">Requester</div><div class="role-card__desc">Verifies claims against records it has explicitly been granted access to — nothing more.</div><div class="role-card__go">Open Insurance portal &rarr;</div></a>
   </div>
 </section>
 
@@ -154,13 +154,13 @@
   <h2>See the whole pipeline live</h2>
   <p>Upload a record, request access as another actor, and revoke it — every step streams from the real backend in real time.</p>
   <div class="hero-cta" style="justify-content:center">
-    <a class="btn btn--demo-hero" href="/dashboard?demo=1"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Take the guided tour</a>
-    <a class="btn" href="/dashboard">Launch Dashboard <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
+    <a class="btn btn--demo-hero" href="/present"><span data-icon="play" style="width:16px;height:16px;display:inline-flex"></span> Run the guided demo</a>
+    <a class="btn" href="/login">Sign in to a portal <span data-icon="chevronRight" style="width:16px;height:16px;display:inline-flex"></span></a>
   </div>
 </div>
 
 <footer class="site-footer">
-  <p><strong>Cardano Healthcare Vault</strong> &middot; Decentralized care, owned by the patient.</p>
+  <p><strong>Decentralized Healthcare</strong> &middot; Patient-owned records on Cardano.</p>
   <p class="site-footer__note">AES-256-GCM encryption, RSA-OAEP / X25519 key wrapping, IPFS storage and the audit log run live. Where a Hydra node, Aiken, Midnight or Blockfrost endpoint is not connected, that layer runs in local mode; the status badges always show the current mode.</p>
 </footer>
 

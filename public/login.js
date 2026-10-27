@@ -3,10 +3,13 @@
   'use strict';
 
   var NAMES = { '01': 'Patient', '02': 'Doctor', '03': 'Hospital', '04': 'Insurance' };
+  var SLUG = { '01': 'patient', '02': 'doctor', '03': 'hospital', '04': 'insurance' };
   var params = new URLSearchParams(location.search);
-  // Only same-site relative paths are allowed as a return target.
+  // Only same-site relative paths are allowed as a return target. Without
+  // one, each actor goes to their own portal after signing in.
   var next = params.get('next');
-  if (!next || next.charAt(0) !== '/' || next.charAt(1) === '/') next = '/dashboard';
+  if (!next || next.charAt(0) !== '/' || next.charAt(1) === '/') next = null;
+  function portalFor(actorId) { return next || '/portal/' + SLUG[actorId]; }
 
   function $(s) { return document.querySelector(s); }
   function $all(s) { return Array.prototype.slice.call(document.querySelectorAll(s)); }
@@ -36,8 +39,9 @@
     var block = $('#signedBlock');
     if (!actors.length) { block.hidden = true; return; }
     block.hidden = false;
-    $('#signedList').textContent = actors.map(function (a) { return NAMES[a]; }).join(', ');
-    $('#continueBtn').setAttribute('href', next);
+    $('#portalLinks').innerHTML = actors.map(function (a) {
+      return '<a class="portal-link portal-link--' + SLUG[a] + '" href="/portal/' + SLUG[a] + '">Open ' + NAMES[a] + ' portal &rarr;</a>';
+    }).join('');
   }
 
   async function refreshSession() {
@@ -89,12 +93,13 @@
         var data = await res.json().catch(function () { return {}; });
         if (!res.ok) throw new Error(data.error || 'Sign-in failed.');
         $('#password').value = '';
+        var target = portalFor(data.actorId);
         // Straight back to where the user came from unless they are adding more actors.
         if (params.get('stay') === '1') {
           renderSigned(data.actors || []);
           btn.textContent = label;
         } else {
-          location.assign(next);
+          location.assign(target);
         }
       } catch (err) {
         showError(err.message);
@@ -118,7 +123,8 @@
           });
           var data = await res.json().catch(function () { return {}; });
           if (!res.ok) throw new Error(data.error || 'Demo sign-in failed.');
-          location.assign(next);
+          var id = Object.keys(SLUG).filter(function (k) { return SLUG[k] === btn.dataset.demoRole; })[0];
+          location.assign(portalFor(id));
         } catch (err) {
           showError(err.message);
           $all('[data-demo-role]').forEach(function (b) { b.disabled = false; });

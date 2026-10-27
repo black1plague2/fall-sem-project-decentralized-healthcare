@@ -28,14 +28,14 @@ test('GET /api/config lists every layer with a mode', async () => {
 test('landing page and dashboard are served', async () => {
   const landing = await request(app).get('/');
   expect(landing.status).toBe(200);
-  expect(landing.text).toContain('Cardano Healthcare Vault');
+  expect(landing.text).toContain('Decentralized Healthcare');
 
   // signed out: the dashboard sends you to the login screen
   const dash = await request(app).get('/dashboard');
   expect(dash.status).toBe(302);
-  expect(dash.headers.location).toBe('/login?next=/dashboard');
+  expect(dash.headers.location).toBe('/login');
 
   const login = await request(app).get('/login');
   expect(login.status).toBe(200);
-  expect(login.text).toContain('Sign in to the vault');
+  expect(login.text).toContain('Sign in to your portal');
 });

@@ -19,43 +19,20 @@
   <aside class="dash-sidebar">
     <a class="dash-brand" href="/">
       <span class="icon-badge icon-badge--outline icon-badge--sm" data-icon="shieldCheck"></span>
-      <span class="dash-brand__name">Cardano<br/>Healthcare Vault</span>
+      <span class="dash-brand__name">Decentralized<br/>Healthcare</span>
     </a>
 
-    <nav class="dash-nav" id="dashNav">
-      <button class="dash-nav__item" data-section="overview">
-        <span class="dash-nav__icon" data-icon="home"></span> Overview
-      </button>
-      <button class="dash-nav__item" data-section="upload">
-        <span class="dash-nav__icon" data-icon="cloudUpload"></span> Upload &amp; Encrypt
-      </button>
-      <button class="dash-nav__item" data-section="records">
-        <span class="dash-nav__icon" data-icon="files"></span> Records
-      </button>
-      <button class="dash-nav__item" data-section="access">
-        <span class="dash-nav__icon" data-icon="shieldCheck"></span> Access &amp; Permissions
-      </button>
-      <button class="dash-nav__item" data-section="hydra">
-        <span class="dash-nav__icon" data-icon="zap"></span> Hydra L2 <span class="dash-nav__live" id="hydraNavLive"></span>
-      </button>
-      <button class="dash-nav__item" data-section="audit">
-        <span class="dash-nav__icon" data-icon="clipboardList"></span> Audit Log
-      </button>
-      <button class="dash-nav__item" data-section="actors">
-        <span class="dash-nav__icon" data-icon="users"></span> Actors
-      </button>
-    </nav>
+    <nav class="dash-nav" id="dashNav" aria-label="Portal sections"></nav>
 
     <div class="dash-sidebar__spacer"></div>
 
-    <div class="dash-actor-block">
-      <div class="dash-actor-block__label">Acting as</div>
-      <div class="dash-actor-list" id="actorList">
-        <div class="actor-row" data-actor="01"><span class="actor-row__glyph icon-badge--patient" data-icon="user"></span><span class="actor-row__name">Patient</span></div>
-        <div class="actor-row" data-actor="02"><span class="actor-row__glyph icon-badge--doctor" data-icon="stethoscope"></span><span class="actor-row__name">Doctor</span></div>
-        <div class="actor-row" data-actor="03"><span class="actor-row__glyph icon-badge--hospital" data-icon="building2"></span><span class="actor-row__name">Hospital</span></div>
-        <div class="actor-row" data-actor="04"><span class="actor-row__glyph icon-badge--insurance" data-icon="umbrella"></span><span class="actor-row__name">Insurance</span></div>
+    <div class="portal-id" id="portalId">
+      <div class="portal-id__label">Signed in as</div>
+      <div class="portal-id__row">
+        <span class="portal-id__glyph" id="portalGlyph"></span>
+        <div><div class="portal-id__name" id="portalName">…</div><div class="portal-id__role" id="portalRole"></div></div>
       </div>
+      <p class="portal-id__note">This portal is locked to one actor. Other actors sign in to their own portals.</p>
     </div>
 
     <button class="dash-signout" id="signOutBtn" type="button"><span data-icon="lockKeyhole" class="dash-nav__icon"></span> Sign out</button>
@@ -69,7 +46,7 @@
       </div>
       <div class="dash-topbar__right">
         <div class="layer-strip" id="layerStrip" aria-label="Verification layer status"></div>
-        <button class="btn btn--demo" id="runDemoBtn" type="button"><span data-icon="play" class="btn__icon"></span> Run demo</button>
+        <span class="portal-chip" id="portalChip"></span>
       </div>
     </header>
 
@@ -79,6 +56,5 @@
 
 <script src="/icons.js" defer></script>
 <script src="/dashboard.js" defer></script>
-<script src="/demo-tour.js" defer></script>
 </body>
 </html>

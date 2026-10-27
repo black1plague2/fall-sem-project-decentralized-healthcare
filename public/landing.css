@@ -362,3 +362,8 @@
   border-radius: 6px;
   font-size: 11.5px;
 }
+
+/* Role cards open each actor's own portal */
+.role-card--link { text-decoration: none; color: inherit; transition: transform .15s ease, box-shadow .15s ease; }
+.role-card--link:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+.role-card__go { margin-top: 14px; font-size: 13px; font-weight: 600; color: var(--ink); }

@@ -13,11 +13,16 @@ const { logger } = require('./auditLogger');
 
 /**
  * Standard rate limiter for general API endpoints
- * 100 requests per 15 minutes per IP
+ * 1000 API requests per 15 minutes per IP. Pages, static files and the
+ * live progress streams are not counted: a portal loads several assets and
+ * polls the Hydra head, and four portals open side by side (the guided demo)
+ * would otherwise exhaust a small budget within minutes. Sign-in and the
+ * sensitive key operations keep their own, much stricter limiters.
  */
 const standardLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // Limit each IP to 100 requests per windowMs
+  max: 1000, // Limit each IP to 1000 API requests per windowMs
+  skip: (req) => !req.path.startsWith('/api/') || req.path.includes('/progress/'),
   message: {
     error: 'Too many requests from this IP, please try again later',
     retryAfter: '15 minutes'

@@ -1116,6 +1116,39 @@ async function rotateCEK(record, onStep = () => {}) {
 /**
  * GET /api/records - List all records with optional filtering
  */
+// What a requesting actor may learn about a record: what it is and whether
+// they themselves can open it. No owner address, CID or other grantees.
+function requesterView(r, viewer) {
+  return {
+    recordId: r.recordId,
+    status: r.status,
+    createdAt: r.createdAt,
+    metadata: {
+      patientId: r.metadata && r.metadata.patientId,
+      originalName: r.metadata && r.metadata.originalName,
+      mimeType: r.metadata && r.metadata.mimeType,
+      uploadedAt: r.metadata && r.metadata.uploadedAt,
+    },
+  };
+}
+
+/**
+ * GET /api/records/lookup?patientId=...
+ * Lets a Doctor, Hospital or Insurance find a patient's records to request
+ * access to. It returns no access information at all: whether the caller
+ * is allowed in is decided only by the permission cascade on request.
+ */
+async function lookupRecordsHandler(req, res, next) {
+  try {
+    const patientId = String(req.query.patientId || '').trim();
+    if (!patientId) return res.status(400).json({ error: 'Enter a patient ID' });
+    const records = await Record.find({ 'metadata.patientId': patientId }).sort({ createdAt: -1 }).limit(25).lean();
+    res.json({ success: true, patientId, records: records.map((r) => requesterView(r)) });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function listRecordsHandler(req, res, next) {
   try {
     const { patientId, owner, status, limit = 50, skip = 0 } = req.query;
@@ -1148,6 +1181,17 @@ async function listRecordsHandler(req, res, next) {
       .lean();
 
     const total = await Record.countDocuments(query);
+
+    // A requesting actor (Doctor, Hospital, Insurance) only ever sees the
+    // records it can open, and never who else can: the access list itself
+    // stays private, the same property the zero-knowledge layer protects.
+    const viewer = req.actingAs || '01';
+    if (viewer !== '01') {
+      const mine = records
+        .filter((r) => r.wrappedKeys && Object.prototype.hasOwnProperty.call(r.wrappedKeys, viewer))
+        .map(requesterView);
+      return res.json({ success: true, total: mine.length, limit: parseInt(limit), skip: parseInt(skip), records: mine, scope: 'shared-with-me' });
+    }
 
     // Transform to safe format
     const safeRecords = records.map(r => ({
@@ -1411,6 +1455,7 @@ module.exports = {
   revokeHandler,
   metadataHandler,
   listRecordsHandler,
+  lookupRecordsHandler,
   uploadProgressHandler,
   proposeShareHandler,
 };

@@ -105,3 +105,12 @@
 .demo-btn--insurance:hover:not(:disabled) { background: var(--color-insurance); }
 .demo-btn:disabled, .demo-btn--all:disabled { opacity: .5; cursor: wait; }
 .demo-btn:focus-visible { outline: 3px solid var(--color-brand); outline-offset: 2px; }
+
+/* Portal links after sign-in */
+.portal-links { display: grid; gap: 8px; margin: 10px 0 14px; }
+.portal-link { display: block; padding: 11px 14px; border-radius: 12px; font-weight: 600; font-size: 14px; color: #fff; text-decoration: none; }
+.portal-link--patient { background: var(--color-patient); }
+.portal-link--doctor { background: var(--color-doctor); }
+.portal-link--hospital { background: var(--color-hospital); }
+.portal-link--insurance { background: var(--color-insurance); }
+.portal-link:hover { filter: brightness(1.08); }

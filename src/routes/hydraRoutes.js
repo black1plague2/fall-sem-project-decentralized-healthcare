@@ -44,6 +44,38 @@ router.get('/health', async (req, res) => {
  * Live view of the default head for the dashboard: parties, epoch, recent
  * snapshots (real + synthetic traffic), signature check and timings.
  */
+// A requesting actor sees the head, but each snapshot's access list is
+// reduced to whether it includes them; only the Patient sees full lists.
+function scopeForViewer(req, status) {
+  const viewer = req.actingAs || '01';
+  if (viewer === '01') return status;
+  const scrub = (v) => {
+    if (Array.isArray(v)) return v.map(scrub);
+    if (v && typeof v === 'object') {
+      const out = {};
+      for (const [k, val] of Object.entries(v)) {
+        out[k] = k === 'permittedActors' && Array.isArray(val) ? val.filter((a) => a === viewer) : scrub(val);
+      }
+      return out;
+    }
+    return v;
+  };
+  return scrub(status);
+}
+
+// Every JSON response from these routes goes through scopeForViewer.
+router.use((req, res, next) => {
+  const json = res.json.bind(res);
+  res.json = (body) => json(scopeForViewer(req, body));
+  next();
+});
+
+// Changing the head's permission state is the record owner's job: a
+// Doctor must not be able to write themselves onto an access list.
+const { requireActor } = require('../services/authService');
+const ownerOnly = requireActor('01');
+router.post(['/heads', '/propose', '/:headId/finalize'], ownerOnly);
+
 router.get('/status', async (req, res) => {
   try {
     const { getOrCreateDefaultHead } = require('../services/hydraClient');

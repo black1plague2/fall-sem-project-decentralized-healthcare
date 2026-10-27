@@ -3,12 +3,15 @@ const Actor = require('../models/actorModel');
 const { verifySignature } = require('../services/walletService');
 
 const router = express.Router();
+// Registering, editing or removing actors (and so their public keys) is an
+// owner/administrator action; requesting actors can only read the registry.
+const ownerOnly = require('../services/authService').requireActor('01');
 
 /**
  * POST /api/actors/register
  * Self-service actor registration
  */
-router.post('/api/actors/register', async (req, res, next) => {
+router.post('/api/actors/register', ownerOnly, async (req, res, next) => {
   try {
     const { actorId, name, role, walletAddress, publicKeys, signature, metadata } = req.body;
 
@@ -79,7 +82,7 @@ router.get('/api/actors/:actorId', async (req, res, next) => {
  * PUT /api/actors/:actorId
  * Update actor details (requires signature)
  */
-router.put('/api/actors/:actorId', async (req, res, next) => {
+router.put('/api/actors/:actorId', ownerOnly, async (req, res, next) => {
   try {
     const { actorId } = req.params;
     const { name, publicKeys, signature, metadata } = req.body;
@@ -126,7 +129,7 @@ router.put('/api/actors/:actorId', async (req, res, next) => {
  * DELETE /api/actors/:actorId
  * Deactivate actor (soft delete)
  */
-router.delete('/api/actors/:actorId', async (req, res, next) => {
+router.delete('/api/actors/:actorId', ownerOnly, async (req, res, next) => {
   try {
     const { actorId } = req.params;
     const { signature } = req.body;

@@ -46,7 +46,10 @@ test('a signed-in patient gets an HttpOnly, SameSite=Strict session', async () =
   expect(session.body.actors).toEqual(['01']);
 
   const dash = await request(app).get('/dashboard').set('Cookie', cookieFrom(res));
-  expect(dash.status).toBe(200);
+  expect(dash.status).toBe(302);
+  expect(dash.headers.location).toBe('/portal/patient');
+  const portal = await request(app).get('/portal/patient').set('Cookie', cookieFrom(res));
+  expect(portal.status).toBe(200);
 });
 
 test('record APIs need a session', async () => {

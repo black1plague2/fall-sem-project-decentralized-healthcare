@@ -788,3 +788,48 @@ body.is-touring .dash-content { padding-bottom: 260px; }
   color: var(--on-dark-soft); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
 }
 .dash-signout:hover { color: var(--on-dark); border-color: var(--on-dark-soft); }
+
+/* ============================================================
+   Actor portals — one portal per actor, coloured by role
+   ============================================================ */
+body.portal--patient   { --portal: var(--color-patient); }
+body.portal--doctor    { --portal: var(--color-doctor); }
+body.portal--hospital  { --portal: var(--color-hospital); }
+body.portal--insurance { --portal: var(--color-insurance); }
+body.portal .dash-sidebar { border-right-color: var(--portal); box-shadow: inset -3px 0 0 var(--portal); }
+body.portal .dash-topbar { border-bottom: 3px solid var(--portal); }
+body.portal .dash-nav__item.is-active { box-shadow: inset 3px 0 0 var(--portal); }
+
+.portal-id { margin: 4px 8px 12px; padding: 14px; border: 1.5px solid var(--portal, var(--line-dark)); border-radius: 14px; background: rgba(255,255,255,0.03); }
+.portal-id__label { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--on-dark-faint); margin-bottom: 10px; }
+.portal-id__row { display: flex; align-items: center; gap: 10px; }
+.portal-id__glyph { width: 34px; height: 34px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; color: #fff; flex: none; }
+.portal-id__glyph .icon { width: 18px; height: 18px; }
+.portal-id__name { font-size: 15px; font-weight: 700; color: var(--on-dark); }
+.portal-id__role { font-size: 12px; color: var(--on-dark-soft); }
+.portal-id__note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.5; color: var(--on-dark-faint); }
+
+.portal-chip { display: inline-flex; align-items: center; padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; }
+
+.portal-hero { display: flex; gap: 16px; align-items: flex-start; padding: 20px 22px; margin-bottom: 22px; border-radius: 18px; color: #fff; }
+.portal-hero__glyph { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.18); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.portal-hero__glyph .icon { width: 22px; height: 22px; }
+.portal-hero__kicker { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; opacity: .85; margin-bottom: 6px; }
+.portal-hero__text { margin: 0; font-size: 15px; line-height: 1.6; max-width: 760px; }
+
+.section-note { margin: -4px 0 14px; color: var(--ink-faint); font-size: 13.5px; line-height: 1.55; }
+.shared-card { display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; column-gap: 16px; align-items: center; cursor: default; }
+.shared-card .record-card__top { grid-column: 1; }
+.shared-card .record-card__meta { grid-column: 1; }
+.shared-card__btn { grid-column: 2; grid-row: 1 / span 2; width: auto; padding: 10px 16px; font-size: 13px; }
+
+.lookup-row { display: flex; gap: 8px; }
+.lookup-row input { flex: 1; }
+.field-hint { margin-top: 6px; font-size: 12.5px; color: var(--ink-faint); line-height: 1.5; min-height: 1em; }
+
+@media (max-width: 900px) {
+  .portal-id { display: none; }
+  .portal-chip { display: none; }
+  .shared-card { grid-template-columns: 1fr; }
+  .shared-card__btn { grid-column: 1; grid-row: auto; margin-top: 10px; }
+}

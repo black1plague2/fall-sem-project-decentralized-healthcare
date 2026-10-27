@@ -73,30 +73,54 @@ signatures are checked again each time the head is read. Set
 `HYDRA_MODE=simulated` to always use it, or `HYDRA_MODE=remote` to turn the
 fallback off.
 
-### Guided tour
+### Four actor portals
 
-Click **Take the guided tour** on the landing page, or **Run demo** in the
-dashboard. It runs the whole story by itself against the real backend, with a
-caption bar explaining each step:
+Each actor has its own portal and its own sign-in:
 
-1. The patient uploads a synthetic lab report and shares it with the Doctor and Hospital
-2. The upload shows up as a new snapshot on the Hydra head
-3. The Doctor is let in by Hydra L2 and decrypts the file
-4. Insurance is refused, because it was never given access
-5. The patient revokes the Hospital: the file gets a new key and Hydra is updated
-6. The Hospital is now locked out, and everything is in the audit log
+| Portal | URL | What it shows |
+| --- | --- | --- |
+| Patient | `/portal/patient` | Upload & encrypt, my records (grant and revoke), access history, Hydra L2 network |
+| Doctor | `/portal/doctor` | Records shared with me, request access, my activity |
+| Hospital | `/portal/hospital` | Records shared with me, request access, my activity |
+| Insurance | `/portal/insurance` | Records shared with me, request access, my activity |
 
-Space pauses, → skips ahead, Esc exits. `/dashboard?demo=1` starts it straight away.
+A portal opens only for a browser signed in as that actor and is locked to
+it: every API call carries an `X-Acting-As` header, and the server refuses a
+call from a portal whose actor is not signed in, or that tries to act as
+another actor. Requesting actors only ever see the records shared with them,
+never who else has access (the same property the Midnight ZK layer protects),
+and only their own audit entries. Signing out of one portal leaves the others
+signed in, so several portals can be open side by side.
 
-Then open **http://localhost:4000** for the landing page, and
-**http://localhost:4000/dashboard** for the working demo: switch between
-Patient/Doctor/Hospital/Insurance, upload & encrypt a file, request access,
-unlock, and revoke access, watching each backend step stream in live over
-Server-Sent Events.
+### Guided demo
+
+**Run the guided demo** on the landing page (or open `/present`) loads the
+four portals side by side and runs every feature end to end, explaining the
+idea behind each step and checking the result on the server:
+
+1. Each actor signs in to its own portal; the server refuses a cross-portal upload
+2. The patient encrypts and uploads a synthetic lab report for the Doctor and Hospital
+3. The access list is published as a signed Hydra L2 snapshot
+4. The Doctor sees the shared record, without the access list
+5. The Doctor's request passes the four-layer cascade
+6. The Doctor decrypts the report
+7. The Hospital is granted with its own key
+8. Insurance looks the patient up and is refused
+9. The patient revokes the Hospital: key rotation
+10. The Hospital is locked out
+11. The audit trail: the patient sees everything, the Doctor only its own activity
+
+The 24 checks are listed as the demo runs, so it doubles as an end-to-end
+test. Space pauses, → skips the wait, Esc stops. `/present?autostart=1`
+starts it straight away. It needs `DEMO_MODE=true` for one-click sign-in;
+otherwise sign in to each portal at `/login` first.
+
+Then open **http://localhost:4000** for the landing page and
+**http://localhost:4000/login** to sign in to a portal.
 
 **Wallets:** with an [Eternl](https://eternl.io) extension installed, "Connect
 Wallet" uses it and signs every action with CIP-8. Without one, and only while
-the server runs with `DEMO_MODE=true`, the dashboard falls back to a demo
+the server runs with `DEMO_MODE=true`, the portals fall back to a demo
 wallet so the full pipeline can still be shown in any browser.
 
 ```mermaid
@@ -205,9 +229,10 @@ GET /api/records/:recordId/metadata
 ## 🎨 Demo Interface
 
 - `/` — landing page (`public/index.html` + `landing.css` + `landing.js`)
-- `/dashboard` — the main working demo (`public/dashboard.html` + `dashboard.css` + `dashboard.js`)
-- `/dashboard` → **Hydra L2** — live head view: snapshot feed, party signatures, L2 vs L1 timing
-- `public/demo-tour.js` — the guided demo
+- `/portal/<role>` — the four actor portals (`public/dashboard.html` + `dashboard.css` + `dashboard.js`, locked to one actor)
+- `/portal/patient` → **Hydra L2 Network** — live head view: snapshot feed, party signatures, L2 vs L1 timing
+- `/present` — the guided demo (`public/present.html` + `present.css` + `present.js`)
+- `/login` — sign-in for each portal
 - `/api/logs` — audit log viewer
 
 Older pages are still reachable for reference: `/app` (earlier wallet-connect
